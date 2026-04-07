@@ -1,0 +1,11 @@
+{
+    "id": "neuro-sts2",
+    "name": "Neuro Integration",
+    "author": "Adesi, ndwang",
+    "description": "Integration for Neuro to play the game",
+    "version": "v0.0.1",
+    "has_pck": false,
+    "has_dll": true,
+    "dependencies": [],
+    "affects_gameplay": false
+}

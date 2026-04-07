@@ -18,13 +18,20 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="GodotSharp" Version="4.7.0-dev.2" />
-      <PackageReference Include="Lib.Harmony" Version="2.4.2" />
+      <Reference Include="GodotSharp">
+        <HintPath>$(SlayTheSpireDataPath)/GodotSharp.dll</HintPath>
+        <Private>false</Private>
+      </Reference>
+      <Reference Include="0Harmony">
+        <HintPath>$(SlayTheSpireDataPath)/0Harmony.dll</HintPath>
+        <Private>false</Private>
+      </Reference>
     </ItemGroup>
 
  
     <Target Name="PostBuild" AfterTargets="Build">
       <MakeDir Directories="$(SlayTheSpireDataPath)/../mods/" />
       <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(SlayTheSpireDataPath)/../mods/" SkipUnchangedFiles="true" />
+      <Copy SourceFiles="neuro-sts2.json" DestinationFolder="$(SlayTheSpireDataPath)/../mods/" SkipUnchangedFiles="true" />
     </Target>
 </Project>
