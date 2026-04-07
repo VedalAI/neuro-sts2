@@ -3,3 +3,4 @@ CommunicationMod/
 bin/
 obj/
 sts2-decompiled/
+Directory.Build.props.user

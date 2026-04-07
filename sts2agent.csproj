@@ -8,12 +8,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Compile Remove="sts2-decompiled\**" />
+      <Compile Remove="sts2-decompiled/**" />
     </ItemGroup>
 
     <ItemGroup>
       <Reference Include="sts2">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\data_sts2_windows_x86_64\sts2.dll</HintPath>
+        <HintPath>$(SlayTheSpireDataPath)/sts2.dll</HintPath>
       </Reference>
     </ItemGroup>
 
@@ -21,8 +21,10 @@
       <PackageReference Include="GodotSharp" Version="4.7.0-dev.2" />
       <PackageReference Include="Lib.Harmony" Version="2.4.2" />
     </ItemGroup>
+
  
-    <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-      <Exec Command="xcopy &quot;$(TargetPath)&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\&quot; /Y" />
+    <Target Name="PostBuild" AfterTargets="Build">
+      <MakeDir Directories="$(SlayTheSpireDataPath)/../mods/" />
+      <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(SlayTheSpireDataPath)/../mods/" SkipUnchangedFiles="true" />
     </Target>
 </Project>
