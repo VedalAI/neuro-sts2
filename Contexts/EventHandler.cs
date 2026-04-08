@@ -14,12 +14,71 @@ using STS2NeuroIntegration;
 using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
+using NeuroSdk.Json;
+using System.Text;
 
 namespace Sts2Agent.Contexts;
 
 public class EventContextHandler : IContextHandler
 {
     public ContextType Type => ContextType.Event;
+
+    public string GetContext(ContextInfo ctx)
+    {
+        var eventRoom = ctx.EventRoom;
+        var evt = eventRoom.LocalMutableEvent;
+        if (evt == null)
+        {
+            return $"You are in the Event: {eventRoom.CanonicalEvent.Title.GetUnformatedText()}";
+        }
+
+        StringBuilder eventBuilder = new();
+        eventBuilder.AppendLine("## You are in an Event");
+
+        eventBuilder.AppendLine("Event name: " + TextHelper.SafeLocString(() => evt.Title));
+
+
+        try
+        {
+            eventBuilder.Append("Event Description: ");
+            var desc = evt.Description;
+            if (desc != null)
+                eventBuilder.AppendLine(desc.GetUnformatedText());
+            else
+                eventBuilder.AppendLine(TextHelper.SafeLocString(() => evt.InitialDescription));
+        }
+        catch
+        {
+        }
+        eventBuilder.AppendLine("Available options are: ");
+
+        foreach (var eventoption in evt.CurrentOptions)
+        {
+
+            eventBuilder.Append($"- {TextHelper.SafeLocString(() => eventoption.Title)}: ");
+            try
+            {
+                var optDesc = eventoption.Description;
+                if (optDesc != null)
+                {
+                    evt.DynamicVars.AddTo(optDesc);
+                    eventBuilder.AppendLine(optDesc.GetUnformatedText());
+                }
+                else
+                {
+                    eventBuilder.AppendLine("No Description");
+                }
+
+            }
+            catch
+            {
+
+                eventBuilder.AppendLine("No Description");
+            }
+        }
+
+        return eventBuilder.ToString();
+    }
 
     public Dictionary<string, object>? SerializeState(ContextInfo ctx)
     {
@@ -97,28 +156,72 @@ public class EventContextHandler : IContextHandler
 
         if (evt.IsFinished)
         {
-            // commands.Add(new Dictionary<string, object> { ["type"] = "proceed" });
+            commands.Add(new("proceed", "Finish the current Event"));
         }
         else
         {
-            for (int i = 0; i < evt.CurrentOptions.Count; i++)
+            commands.Add(new("select_event_option", "Select a option in the Event", new()
             {
-                var opt = evt.CurrentOptions[i];
-                if (!opt.IsLocked)
+                Type = NeuroSdk.Json.JsonSchemaType.Object,
+                Required = ["option"],
+                Properties = new()
                 {
-                    // commands.Add(new Dictionary<string, object>
-                    // {
-                    //     ["type"] = "select_event_option",
-                    //     ["optionIndex"] = i,
-                    //     ["label"] = TextHelper.SafeLocString(() => opt.Title)
-                    // });
+                    ["option"] = QJS.Enum(evt.CurrentOptions.Where((x) => !x.IsLocked).Select((x) => x.Title.GetUnformatedText()))
                 }
-            }
+
+            }));
         }
 
         return commands;
     }
 
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        parsedData = data.Data;
+        var sceneRoot = SceneHelper.GetSceneRoot();
+        if (sceneRoot == null)
+            return ExecutionResult.ModFailure("Cannot access scene tree");
+
+        if (action.Name == "proceed")
+        {
+            // Try proceed button
+            var proceedButton = UiHelper.FindFirst<NProceedButton>(sceneRoot);
+            if (proceedButton != null)
+            {
+                return ExecutionResult.Success();
+            }
+
+            // Finished events use NEventOptionButton with IsProceed=true
+            var eventProceed = UiHelper.FindAll<NEventOptionButton>(sceneRoot)
+                .FirstOrDefault(b => b.Option.IsProceed);
+            if (eventProceed != null)
+            {
+                return ExecutionResult.Success();
+            }
+
+            return ExecutionResult.ModFailure("Couldn't find a Proceed button. You are mostlikely stuck here...");
+        }
+        var optionName = data?.Data?["option"]?.GetValue<string>() ?? ""; //TODO: Figure out if this is good enough.
+
+
+        var allButtons = UiHelper.FindAll<NEventOptionButton>(sceneRoot);
+
+        // Buttons are added to the container in CurrentOptions order,
+        // so tree-order index matches the event option index
+        var button = allButtons.Find((btn) => btn.Option.Title.GetUnformatedText() == optionName);
+
+        if (button == null)
+        {
+            Plugin.LogDebug($"Event button lookup: requested={optionName}, found={allButtons.Count} buttons");
+            return ExecutionResult.Failure($"Event option index {optionName} not found");
+        }
+        if (button.Option.IsLocked)
+        {
+            return ExecutionResult.Failure($"Event option index {optionName} is Locked");
+        }
+
+        return ExecutionResult.Success();
+    }
     public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
@@ -132,7 +235,7 @@ public class EventContextHandler : IContextHandler
 
     private async Task<ActionResult.Result> SelectEventOption(JsonElement root, ContextInfo ctx)
     {
-        var optionIndex = root.GetProperty("optionIndex").GetInt32();
+        var optionName = root.GetProperty("option").GetString();
 
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
@@ -142,16 +245,18 @@ public class EventContextHandler : IContextHandler
 
         // Buttons are added to the container in CurrentOptions order,
         // so tree-order index matches the event option index
-        var button = optionIndex < allButtons.Count ? allButtons[optionIndex] : null;
+        var button = allButtons.Find((btn) => btn.Option.Title.GetUnformatedText() == optionName);
 
         if (button == null || button.Option.IsLocked)
         {
-            Plugin.LogDebug($"Event button lookup: requested={optionIndex}, found={allButtons.Count} buttons");
-            return ActionResult.Error($"Event option index {optionIndex} not found or locked");
+            Plugin.LogDebug($"Event button lookup: requested={optionName}, found={allButtons.Count} buttons");
+            return ActionResult.Error($"Event option index {optionName} not found or locked");
         }
 
+        GameStabilityDetector.ResetWasStable();
+
         await GodotMainThread.ClickAsync(button);
-        Plugin.Log($"Selected event option {optionIndex}");
+        Plugin.Log($"Selected event option {optionName}");
         return ActionResult.Ok("Event option selected");
     }
 
@@ -213,10 +318,4 @@ public class EventContextHandler : IContextHandler
             return false;
         }
     }
-
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
-    {
-        throw new NotImplementedException();
-    }
-
 }

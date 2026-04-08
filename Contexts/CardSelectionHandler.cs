@@ -14,6 +14,7 @@ using STS2NeuroIntegration;
 using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
+using NeuroSdk.Json;
 
 namespace Sts2Agent.Contexts;
 
@@ -94,26 +95,20 @@ public class CardSelectionHandler : IContextHandler
             if (tcsField != null && tcsField.GetValue(ctx.OverlayScreen) == null)
                 return commands;
         }
-
-        for (int i = 0; i < cardHolders.Count; i++)
+        commands.Add(new("select_card", "Select a available card", new()
         {
-            var card = cardHolders[i].CardNode?.Model;
-            if (card != null)
-            {
-                // commands.Add(new Dictionary<string, object>
-                // {
-                //     ["type"] = "select_card",
-                //     ["cardIndex"] = i,
-                //     ["card"] = card.Title.ToString()
-                // });
+            Type = NeuroSdk.Json.JsonSchemaType.Object,
+            Required = ["card"],
+            Properties = {
+                ["card"] = QJS.Enum(cardHolders.Select((x)=> x.CardNode!.Model!.Title).Distinct()),
             }
-        }
+        }));
 
         var canSkip = ctx.OverlayScreen is NCardRewardSelectionScreen;
         if (!canSkip && ctx.OverlayNode != null)
             canSkip = UiHelper.FindFirst<NChoiceSelectionSkipButton>(ctx.OverlayNode) != null;
-        // if (canSkip)
-        //     commands.Add(new Dictionary<string, object> { ["type"] = "skip" });
+        if (canSkip)
+            commands.Add(new("skip", "Skip this selection, No card is going to be added to your deck"));
 
         return commands;
     }
@@ -128,9 +123,37 @@ public class CardSelectionHandler : IContextHandler
         };
     }
 
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        parsedData = data.Data;
+        if (action.Name == "skip")
+        {
+            return ExecutionResult.Success();
+        }
+        else
+        {
+            var cardIndex = data.Data?["card"]?.GetValue<string>();
+            if (cardIndex == null)
+            {
+                return ExecutionResult.Failure("Missing Parameter card");
+            }
+            if (ctx?.OverlayScreen == null || ctx.OverlayNode == null)
+                return ExecutionResult.Failure("No card selection screen open");
+            var holders = ctx.CardHolders;
+            if (holders == null)
+                return ExecutionResult.Failure($"Card index {cardIndex} out of range (available: {holders?.Count ?? 0})");
+
+            var holder = holders.First((x) => x.CardNode?.Model?.Title == cardIndex);
+            if (holder == null)
+            {
+                return ExecutionResult.Failure($"Card name {cardIndex} not in deck");
+            }
+            return ExecutionResult.Success();
+        }
+    }
     private async Task<ActionResult.Result> SelectCard(JsonElement root, ContextInfo ctx)
     {
-        var cardIndex = root.GetProperty("cardIndex").GetInt32();
+        var cardIndex = root.GetProperty("card").GetString();
 
         if (ctx.OverlayScreen == null || ctx.OverlayNode == null)
             return ActionResult.Error("No card selection screen open");
@@ -150,10 +173,14 @@ public class CardSelectionHandler : IContextHandler
         }
 
         var holders = ctx.CardHolders;
-        if (holders == null || cardIndex < 0 || cardIndex >= holders.Count)
+        if (holders == null)
             return ActionResult.Error($"Card index {cardIndex} out of range (available: {holders?.Count ?? 0})");
 
-        var holder = holders[cardIndex];
+        var holder = holders.First((x) => x.CardNode.Model.Title == cardIndex);
+        if (holder == null)
+        {
+            return ActionResult.Error($"Card name {cardIndex} not in deck");
+        }
         var isGridScreen = ctx.IsGridScreen;
         var grid = isGridScreen && ctx.OverlayNode != null
             ? UiHelper.FindFirst<NCardGrid>(ctx.OverlayNode) : null;
@@ -273,9 +300,5 @@ public class CardSelectionHandler : IContextHandler
         Plugin.LogDebug("WaitForOverlayClose: timed out");
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
-    {
-        throw new NotImplementedException();
-    }
 
 }

@@ -28,7 +28,7 @@ public class ConstructedAction(string name, string description, JsonSchema? sche
 
     protected override string Description => description!;
 
-    protected override JsonSchema? Schema => schema ?? new();
+    protected override JsonSchema? Schema => schema;
 
     protected override void ExecuteUnsafe(object? parsedData)
     {

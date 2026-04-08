@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Logging;
 using NeuroSdk.Actions;
 using NeuroSdk.Messages.Outgoing;
 using Sts2Agent;
+using Sts2Agent.Contexts;
 namespace STS2NeuroIntegration;
 
 public class NeuroIntegration : Node
@@ -13,7 +14,7 @@ public class NeuroIntegration : Node
   public static readonly JsonSerializerOptions JsonOptions = new()
   {
     WriteIndented = true,
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    DefaultIgnoreCondition = JsonIgnoreCondition.Never,
     Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
   };
   public static NeuroIntegration? Instance
@@ -71,6 +72,7 @@ public class NeuroIntegration : Node
   {
 
     var CurrentState = GameStateSerializer.Serialize();
+    Plugin.LogDebug($"current state: {JsonSerializer.Serialize(CurrentState, JsonOptions)}");
 
     if (CurrentState.TryGetValue("error", out var error))
     {
@@ -80,7 +82,12 @@ public class NeuroIntegration : Node
 
     if (CurrentState.TryGetValue("available_commands", out var cmds) && cmds is List<ConstructedAction> CommandsList)
     {
-      var window = ActionWindow.Create(this).SetContext("You are in the Main Menu"); // TODO: replace this with the proper context from above values.
+      var ctx = GameContext.Resolve();
+      if (ctx == null)
+      {
+        Plugin.LogError("Couldn't resolve current Context");
+      }
+      var window = ActionWindow.Create(this).SetContext(ActionExecutor.GetHandlers().First((handler) => handler.Type == ctx.Type).GetContext(ctx)); // TODO: replace this with the proper context from above values.
       var new_global_actions = new List<ConstructedAction>();
       foreach (var item in CommandsList)
       {

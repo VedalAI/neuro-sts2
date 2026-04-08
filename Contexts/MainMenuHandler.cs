@@ -147,6 +147,7 @@ public class MainMenuHandler : IContextHandler
             }
 
             Plugin.Log("Abandoned saved run");
+            GameStabilityDetector.ResetWasStable();
             return ActionResult.Ok("Abandoned saved run");
         }
 

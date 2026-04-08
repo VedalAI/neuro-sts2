@@ -90,6 +90,7 @@ public static class ActionExecutor
                         {
                             Plugin.LogError($"[CRITICAL] Action has Errored during Execution with Message: {result.message}, The Validation or Execution are wrong for handler of action: {action.Name}");
                         }
+                        GameStabilityDetector.ScheduleStabilityCheck();
                     }
                 });
                 return;
@@ -104,48 +105,6 @@ public static class ActionExecutor
 
     }
 
-    // public static async Task<string> Execute(string actionJson)
-    // {
-    //     try
-    //     {
-    //         using var doc = JsonDocument.Parse(actionJson);
-    //         var root = doc.RootElement;
-
-    //         if (!root.TryGetProperty("type", out var typeProp))
-    //             return ActionResult.Error("Missing 'type' field");
-
-    //         var type = typeProp.GetString()!;
-    //         Plugin.LogDebug($"Executing action: {type}");
-
-    //         var ctx = GameContext.Resolve();
-    //         if (ctx == null)
-    //             return ActionResult.Error("No active run or interactive screen");
-
-    //         // Dispatch to the handler matching the current context
-    //         var handler = Handlers.FirstOrDefault(h => h.Type == ctx.Type);
-    //         if (handler != null)
-    //         {
-    //             var task = handler.TryExecute(type, root, ctx);
-    //             if (task != null)
-    //             {
-    //                 var result = await task;
-    //                 if (result != null)
-    //                     return result;
-    //             }
-    //         }
-
-    //         return ActionResult.Error($"Unknown action type '{type}' for context '{ctx.Type}'");
-    //     }
-    //     catch (JsonException)
-    //     {
-    //         return ActionResult.Error("Invalid JSON");
-    //     }
-    //     catch (Exception e)
-    //     {
-    //         Plugin.LogError($"Action execution error: {e}");
-    //         return ActionResult.Error(e.Message);
-    //     }
-    // }
 
     /// <summary>
     /// Get the handler registry for use by GameStateSerializer.

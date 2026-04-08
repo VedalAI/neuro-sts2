@@ -12,6 +12,11 @@ public interface IContextHandler
 {
     ContextType Type { get; }
 
+    string GetContext(ContextInfo ctx)
+    {
+        return $"You are in {Type}";
+    }
+
     Dictionary<string, object>? SerializeState(ContextInfo ctx);
 
     List<ConstructedAction> GetCommands(ContextInfo ctx);

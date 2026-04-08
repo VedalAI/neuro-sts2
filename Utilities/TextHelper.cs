@@ -22,6 +22,11 @@ public static class TextHelper
         return BbCodeRegex.Replace(text, "").Trim();
     }
 
+    public static string GetUnformatedText(this LocString locString)
+    {
+        return StripBBCode(locString.GetFormattedText());
+    }
+
     public static string SafeLocString(Func<object> getter)
     {
         try
