@@ -128,7 +128,7 @@ public static class GameStabilityDetector
         {
             _wasStable = true;
             Plugin.Log("=== GAME STABLE ===");
-            Plugin.LogDebug(GameStateSerializer.Serialize());
+            Plugin.LogDebug(GameStateSerializer.Serialize().ToString());
             OnBecameStable?.Invoke();
         }
         else if (stable && _wasStable)
@@ -181,23 +181,23 @@ public static class GameStabilityDetector
                 return false;
 
             case ContextType.Map:
-            {
-                var ms = NMapScreen.Instance;
-                if (ms is { IsTravelEnabled: true })
                 {
-                    Plugin.LogDebug("IsStable: map screen, travel enabled → true");
-                    return true;
+                    var ms = NMapScreen.Instance;
+                    if (ms is { IsTravelEnabled: true })
+                    {
+                        Plugin.LogDebug("IsStable: map screen, travel enabled → true");
+                        return true;
+                    }
+                    // Map is open but not interactive — if travel finished, close it
+                    // so the room underneath becomes visible to viewers and agent
+                    if (ms is { IsTraveling: false })
+                    {
+                        Plugin.Log("Map overlay stuck open after travel — closing");
+                        ms.Close();
+                    }
+                    Plugin.LogDebug($"IsStable: map screen, travel not enabled (traveling={ms?.IsTraveling}) → false");
+                    return false;
                 }
-                // Map is open but not interactive — if travel finished, close it
-                // so the room underneath becomes visible to viewers and agent
-                if (ms is { IsTraveling: false })
-                {
-                    Plugin.Log("Map overlay stuck open after travel — closing");
-                    ms.Close();
-                }
-                Plugin.LogDebug($"IsStable: map screen, travel not enabled (traveling={ms?.IsTraveling}) → false");
-                return false;
-            }
 
             case ContextType.CardSelection:
             case ContextType.Rewards:
@@ -209,25 +209,25 @@ public static class GameStabilityDetector
                 return true;
 
             case ContextType.Combat:
-            {
-                var cm = CombatManager.Instance;
-                var result = cm != null
-                    && cm.IsPlayPhase
-                    && !cm.PlayerActionsDisabled
-                    && RunManager.Instance.ActionExecutor.CurrentlyRunningAction == null;
-                Plugin.LogDebug($"IsStable: combat → IsPlayPhase={cm?.IsPlayPhase}, ActionsDisabled={cm?.PlayerActionsDisabled}, RunningAction={RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.GetType().Name ?? "null"} → {result}");
-                return result;
-            }
+                {
+                    var cm = CombatManager.Instance;
+                    var result = cm != null
+                        && cm.IsPlayPhase
+                        && !cm.PlayerActionsDisabled
+                        && RunManager.Instance.ActionExecutor.CurrentlyRunningAction == null;
+                    Plugin.LogDebug($"IsStable: combat → IsPlayPhase={cm?.IsPlayPhase}, ActionsDisabled={cm?.PlayerActionsDisabled}, RunningAction={RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.GetType().Name ?? "null"} → {result}");
+                    return result;
+                }
 
             case ContextType.Event:
-            {
-                var evt = ctx.EventRoom!.LocalMutableEvent;
-                if (evt is AncientEventModel && EventContextHandler.TryAdvanceAncientDialogue())
-                    return false;
-                var evtResult = evt != null && (evt.CurrentOptions.Count > 0 || evt.IsFinished);
-                Plugin.LogDebug($"IsStable: event → hasEvent={evt != null}, options={evt?.CurrentOptions.Count ?? 0}, finished={evt?.IsFinished} → {evtResult}");
-                return evtResult;
-            }
+                {
+                    var evt = ctx.EventRoom!.LocalMutableEvent;
+                    if (evt is AncientEventModel && EventContextHandler.TryAdvanceAncientDialogue())
+                        return false;
+                    var evtResult = evt != null && (evt.CurrentOptions.Count > 0 || evt.IsFinished);
+                    Plugin.LogDebug($"IsStable: event → hasEvent={evt != null}, options={evt?.CurrentOptions.Count ?? 0}, finished={evt?.IsFinished} → {evtResult}");
+                    return evtResult;
+                }
 
             case ContextType.RestSite:
             case ContextType.Shop:
@@ -235,25 +235,25 @@ public static class GameStabilityDetector
                 return true;
 
             case ContextType.GameOver:
-            {
-                var goScreen = MegaCrit.Sts2.Core.Nodes.Screens.Overlays.NOverlayStack.Instance?.Peek()
-                    as MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NGameOverScreen;
-                if (goScreen == null)
                 {
-                    Plugin.LogDebug("IsStable: game over screen not found → false");
-                    return false;
+                    var goScreen = MegaCrit.Sts2.Core.Nodes.Screens.Overlays.NOverlayStack.Instance?.Peek()
+                        as MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NGameOverScreen;
+                    if (goScreen == null)
+                    {
+                        Plugin.LogDebug("IsStable: game over screen not found → false");
+                        return false;
+                    }
+                    var mainMenuBtn = UiHelper.FindFirst<MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NReturnToMainMenuButton>(goScreen);
+                    if (mainMenuBtn != null && mainMenuBtn.Visible && mainMenuBtn.IsEnabled)
+                    {
+                        Plugin.LogDebug("IsStable: game over main menu button ready → true");
+                        return true;
+                    }
+                    var continueBtn = UiHelper.FindFirst<MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NGameOverContinueButton>(goScreen);
+                    var ready = continueBtn != null && continueBtn.IsEnabled;
+                    Plugin.LogDebug($"IsStable: game over continue enabled={ready} → {ready}");
+                    return ready;
                 }
-                var mainMenuBtn = UiHelper.FindFirst<MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NReturnToMainMenuButton>(goScreen);
-                if (mainMenuBtn != null && mainMenuBtn.Visible && mainMenuBtn.IsEnabled)
-                {
-                    Plugin.LogDebug("IsStable: game over main menu button ready → true");
-                    return true;
-                }
-                var continueBtn = UiHelper.FindFirst<MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NGameOverContinueButton>(goScreen);
-                var ready = continueBtn != null && continueBtn.IsEnabled;
-                Plugin.LogDebug($"IsStable: game over continue enabled={ready} → {ready}");
-                return ready;
-            }
 
             case ContextType.MainMenu:
                 Plugin.LogDebug("IsStable: main menu → true");
@@ -264,19 +264,19 @@ public static class GameStabilityDetector
                 return true;
 
             case ContextType.Treasure:
-            {
-                if (TreasureRoomAutoPatch.AutoClickInProgress)
                 {
-                    Plugin.LogDebug("IsStable: treasure auto-click in progress → false");
-                    return false;
+                    if (TreasureRoomAutoPatch.AutoClickInProgress)
+                    {
+                        Plugin.LogDebug("IsStable: treasure auto-click in progress → false");
+                        return false;
+                    }
+                    var treasureRoom = TreasureRoomAutoPatch.CurrentRoom;
+                    var proceedEnabled = treasureRoom != null
+                        && GodotObject.IsInstanceValid(treasureRoom)
+                        && treasureRoom.ProceedButton?.IsEnabled == true;
+                    Plugin.LogDebug($"IsStable: treasure proceed={proceedEnabled} → {proceedEnabled}");
+                    return proceedEnabled;
                 }
-                var treasureRoom = TreasureRoomAutoPatch.CurrentRoom;
-                var proceedEnabled = treasureRoom != null
-                    && GodotObject.IsInstanceValid(treasureRoom)
-                    && treasureRoom.ProceedButton?.IsEnabled == true;
-                Plugin.LogDebug($"IsStable: treasure proceed={proceedEnabled} → {proceedEnabled}");
-                return proceedEnabled;
-            }
 
             default:
                 return false;

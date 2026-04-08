@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
+using STS2NeuroIntegration;
 using NeuroSdk.Actions;
 using NeuroSdk.Messages.Outgoing;
 using NeuroSdk.Websocket;
@@ -17,7 +18,6 @@ namespace NeuroSdk
     [HarmonyPatch(typeof(NGame), nameof(NGame._Notification))]
     public static class NGamePatch
     {
-        public static bool OnlyOnce = false;
         [HarmonyPostfix]
         public static void PostFix(int what)
         {
@@ -25,19 +25,25 @@ namespace NeuroSdk
             switch (what)
             {
                 case (int)Godot.Node.NotificationReady:
-                    var tree = (Engine.GetMainLoop() as SceneTree).Root.GetNode("Game");
+                    var tree = (Engine.GetMainLoop() as SceneTree)?.Root.GetNode("Game");
+                    if (tree == null)
+                    {
+                        Plugin.LogError("Couldn't Initiate Integration, Game Node not found");
+                        return;
+                    }
                     tree.SetProcessInternal(true);
                     tree.SetProcess(true);
                     NeuroSdkSetup.Initialize(tree, "Slay The Spire 2");
                     Plugin.LogDebug("NeuroSDKReady");
-                    OnlyOnce = true;
                     break;
 
                 case (int)Godot.Node.NotificationInternalProcess:
-                    NeuroSdkSetup.WebsocketInstance.Loop();
+                    NeuroSdkSetup.WebsocketInstance?.Loop();
+                    STS2NeuroIntegration.NeuroIntegration.Instance?.Processs();
                     break;
                 case (int)1006:
                     NeuroSdkSetup.ActionHandleInstance?.Quit();
+                    STS2NeuroIntegration.NeuroIntegration.Instance?.Quit();
                     break;
                 default:
                     break;
@@ -46,9 +52,9 @@ namespace NeuroSdk
     }
     public static partial class NeuroSdkSetup
     {
-        public static CommandHandler CommandInstance;
-        public static NeuroActionHandler ActionHandleInstance;
-        public static WebsocketConnection WebsocketInstance;
+        public static CommandHandler? CommandInstance;
+        public static NeuroActionHandler? ActionHandleInstance;
+        public static WebsocketConnection? WebsocketInstance;
         public static void Initialize(Node Root, string game)
         {
             var neuroSDKNode = new Node();
@@ -83,11 +89,15 @@ namespace NeuroSdk
             connection.AddChild(neuroActionHandler);
 
 
-            NeuroSdkSetup.CommandInstance.Initialize();
-            NeuroSdkSetup.WebsocketInstance.Startup();
+            CommandInstance.Initialize();
+            WebsocketInstance.Startup();
 
 
-            Context.Send("You are Playing Slay the Spire 2");
+            var integration = new STS2NeuroIntegration.NeuroIntegration();
+            neuroSDKNode.AddChild(integration);
+            STS2NeuroIntegration.NeuroIntegration.Setup(integration);
+
+            integration.Ready();
 
 
         }

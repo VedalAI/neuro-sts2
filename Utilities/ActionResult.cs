@@ -4,14 +4,28 @@ namespace Sts2Agent.Utilities;
 
 public static class ActionResult
 {
-    public static string Ok(string message)
+    public struct Result
     {
-        return JsonSerializer.Serialize(new { status = "ok", message });
+        public bool ok;
+        public string message;
+
+    }
+    public static Result Ok(string message)
+    {
+        return new()
+        {
+            ok = true,
+            message = message
+        };
     }
 
-    public static string Error(string message)
+    public static Result Error(string message)
     {
         Plugin.LogError($"Action error: {message}");
-        return JsonSerializer.Serialize(new { error = message });
+        return new()
+        {
+            ok = false,
+            message = message
+        };
     }
 }

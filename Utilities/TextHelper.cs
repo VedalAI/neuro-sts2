@@ -36,6 +36,18 @@ public static class TextHelper
             return "???";
         }
     }
+    public static string GetCharacterDescription(CharacterModel character)
+    {
+        try
+        {
+            var table = LocManager.Instance.GetTable("characters");
+            return StripBBCode(table.GetRawText(character.CharacterSelectDesc));
+        }
+        catch
+        {
+            return SafeLocString(() => character.CharacterSelectDesc);
+        }
+    }
 
     public static string GetCardDescription(CardModel card)
     {
@@ -108,6 +120,7 @@ public static class TextHelper
         }
     }
 
+    //TODO: Fix Icon text just being duplicated. convert StarsStarsStart to 3x Stars. and so on
     private static string GetLocalizedIconText(string iconPath)
     {
         try

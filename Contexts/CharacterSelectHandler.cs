@@ -7,6 +7,11 @@ using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Localization;
 using Sts2Agent.Utilities;
+using STS2NeuroIntegration;
+using NeuroSdk.Websocket;
+using NeuroSdk.Actions;
+using NeuroSdk.Json;
+using System.Text;
 
 namespace Sts2Agent.Contexts;
 
@@ -50,44 +55,75 @@ public class CharacterSelectHandler : IContextHandler
         return result;
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        var commands = new List<ConstructedAction>();
         if (ctx.CharacterButtons == null) return commands;
+
+        var character_names = new List<string>();
 
         for (int i = 0; i < ctx.CharacterButtons.Count; i++)
         {
             var btn = ctx.CharacterButtons[i];
             if (!GodotObject.IsInstanceValid(btn) || btn.IsLocked) continue;
-            commands.Add(new Dictionary<string, object>
-            {
-                ["type"] = "select_character",
-                ["index"] = i,
-                ["name"] = GetCharacterName(btn)
-            });
+            character_names.Add(GetCharacterName(btn));
         }
+        commands.Add(new ConstructedAction("select_character", "Selects a new Character", new()
+        {
+            Type = NeuroSdk.Json.JsonSchemaType.Object,
+            Required = ["character"],
+            Properties = new Dictionary<string, NeuroSdk.Json.JsonSchema>
+            {
+                ["character"] = QJS.Enum(character_names)
+            }
+        }, true));
+
 
         if (ctx.CharacterSelectScreen != null && GodotObject.IsInstanceValid(ctx.CharacterSelectScreen))
         {
-            var embarkButton = ctx.CharacterSelectScreen.GetNode<Godot.Control>("ConfirmButton")
-                as MegaCrit.Sts2.Core.Nodes.CommonUi.NConfirmButton;
-            if (embarkButton != null && embarkButton.IsEnabled)
-                commands.Add(new Dictionary<string, object> { ["type"] = "embark" });
+            if (ctx.CharacterSelectScreen.GetNode<Godot.Control>("ConfirmButton") is MegaCrit.Sts2.Core.Nodes.CommonUi.NConfirmButton embarkButton
+                && embarkButton.IsEnabled)
+                commands.Add(new ConstructedAction("embark", "Start a new Run with the current selected Character"));
         }
 
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
-    {
-        if (actionType == "select_character")
-        {
-            var index = root.GetProperty("index").GetInt32();
-            var buttons = ctx.CharacterButtons;
-            if (buttons == null || index < 0 || index >= buttons.Count)
-                return ActionResult.Error($"Character index {index} out of range (available: {buttons?.Count ?? 0})");
 
-            var btn = buttons[index];
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        parsedData = data.Data;
+        if (action.Name == "select_character")
+        {
+            var has_character_unlocked = ctx?.CharacterButtons?.Find((btn) => data.GetValue<string>("character") == GetCharacterName(btn));
+            if (has_character_unlocked == null)
+            {
+                return ExecutionResult.Failure($"Couldn't find character with name: {data.GetValue<string>("character")}");
+            }
+            else
+            {
+                return ExecutionResult.Success();
+            }
+        }
+        else if (action.Name == "embark")
+        {
+
+            if (ctx.CharacterSelectScreen != null && GodotObject.IsInstanceValid(ctx.CharacterSelectScreen))
+            {
+                if (ctx.CharacterSelectScreen.GetNode<Godot.Control>("ConfirmButton") is MegaCrit.Sts2.Core.Nodes.CommonUi.NConfirmButton embarkButton
+                    && embarkButton.IsEnabled)
+                    return ExecutionResult.Success();
+            }
+            return ExecutionResult.Failure("Couldn't find Embark button");
+        }
+        return ExecutionResult.ModFailure("Unkown Action for Character Selection, only select_character and embark are valid actions");
+    }
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    {
+        if (action.Name == "select_character")
+        {
+            var character_name = root.GetProperty("character").GetString();
+            var btn = ctx?.CharacterButtons?.Find((btn) => GetCharacterName(btn) == character_name);
             if (!GodotObject.IsInstanceValid(btn))
                 return ActionResult.Error("Character button is no longer valid");
             if (btn.IsLocked)
@@ -96,11 +132,17 @@ public class CharacterSelectHandler : IContextHandler
             await GodotMainThread.RunAsync(() => btn.Select());
 
             var name = GetCharacterName(btn);
+            var character = btn.Character;
+            StringBuilder character_descriptor = new();
+            character_descriptor.AppendLine($"# Selected {name}");
+            character_descriptor.ReprecentStartingCharacter(character);
+
             Plugin.Log($"Selected character: {name}");
+            NeuroIntegration.SendContext(character_descriptor.ToString());
             return ActionResult.Ok($"Selected character: {name}");
         }
 
-        if (actionType == "embark")
+        if (action.Name == "embark")
         {
             var screen = ctx.CharacterSelectScreen;
             if (screen == null || !GodotObject.IsInstanceValid(screen))
@@ -112,6 +154,9 @@ public class CharacterSelectHandler : IContextHandler
                 return ActionResult.Error("Embark button not found");
             if (!embarkButton.IsEnabled)
                 return ActionResult.Error("Embark button is not enabled (select a character first)");
+
+            //Unregister select_character action
+            NeuroIntegration.UnregisterAction("select_character");
 
             await GodotMainThread.ClickAsync(embarkButton);
 

@@ -6,6 +6,9 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
+using STS2NeuroIntegration;
+using NeuroSdk.Actions;
+using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 
 namespace Sts2Agent.Contexts;
@@ -63,9 +66,9 @@ public class HandSelectionHandler : IContextHandler
         return overlay;
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        var commands = new List<ConstructedAction>();
         var hand = ctx.Hand;
         if (hand == null) return commands;
 
@@ -73,27 +76,28 @@ public class HandSelectionHandler : IContextHandler
         for (int i = 0; i < holders.Count; i++)
         {
             var card = holders[i].CardNode!.Model;
-            commands.Add(new Dictionary<string, object>
-            {
-                ["type"] = "choose_hand_cards",
-                ["cardIndex"] = i,
-                ["card"] = card.Title.ToString()
-            });
+            // commands.Add(new Dictionary<string, object>
+            // {
+            //     ["type"] = "choose_hand_cards",
+            //     ["cardIndex"] = i,
+            //     ["card"] = card.Title.ToString()
+            // });
         }
 
         if (ReflectionCache.HandConfirmButton != null)
         {
             var confirmButton = ReflectionCache.HandConfirmButton.GetValue(hand) as NConfirmButton;
-            if (confirmButton != null && confirmButton.IsEnabled)
-                commands.Add(new Dictionary<string, object> { ["type"] = "confirm_selection" });
+            // if (confirmButton != null && confirmButton.IsEnabled)
+            //     commands.Add(new Dictionary<string, object> { ["type"] = "confirm_selection" });
         }
 
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+
     {
-        return actionType switch
+        return action.Name switch
         {
             "choose_hand_cards" => await ChooseHandCard(root, ctx),
             "confirm_selection" => await ConfirmSelection(ctx),
@@ -101,7 +105,7 @@ public class HandSelectionHandler : IContextHandler
         };
     }
 
-    private async Task<string> ChooseHandCard(JsonElement root, ContextInfo ctx)
+    private async Task<ActionResult.Result> ChooseHandCard(JsonElement root, ContextInfo ctx)
     {
         var hand = ctx.Hand;
         if (hand == null || !hand.IsInCardSelection)
@@ -125,7 +129,7 @@ public class HandSelectionHandler : IContextHandler
         return ActionResult.Ok("Hand card selected");
     }
 
-    private async Task<string> ConfirmSelection(ContextInfo ctx)
+    private async Task<ActionResult.Result> ConfirmSelection(ContextInfo ctx)
     {
         var hand = ctx.Hand;
         if (hand == null || !hand.IsInCardSelection)
@@ -150,4 +154,10 @@ public class HandSelectionHandler : IContextHandler
             .Where(h => h.Visible && h.CardNode?.Model != null)
             .ToList();
     }
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
+
 }

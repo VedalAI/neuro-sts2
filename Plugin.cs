@@ -28,7 +28,6 @@ public static class Plugin
     public static LogLevel CurrentLogLevel { get; set; } = LogLevel.Debug;
 
     private static Harmony? _harmony;
-    public static HttpServer? Server { get; private set; }
 
     public static void Initialize()
     {
@@ -40,7 +39,7 @@ public static class Plugin
             Godot.Bridge.ScriptManagerBridge.LookupScriptsInAssembly(Assembly.GetExecutingAssembly());
 
             GameStabilityDetector.Initialize();
-            GameStabilityDetector.OnBecameStable += () => Server?.SignalDecisionPoint();
+            GameStabilityDetector.OnBecameStable += () => STS2NeuroIntegration.NeuroIntegration.SignalDecisionPoint();
 
             RunManager.Instance.RoomEntered += OnRoomEntered;
 

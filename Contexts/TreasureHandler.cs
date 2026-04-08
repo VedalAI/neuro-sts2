@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 using Godot;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Runs;
+using STS2NeuroIntegration;
+using NeuroSdk.Actions;
+using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 
 namespace Sts2Agent.Contexts;
@@ -40,25 +43,26 @@ public class TreasureHandler : IContextHandler
         return result;
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        var commands = new List<ConstructedAction>();
 
         var room = TreasureRoomAutoPatch.CurrentRoom;
-        if (room != null && GodotObject.IsInstanceValid(room) && room.ProceedButton?.IsEnabled == true)
-            commands.Add(new Dictionary<string, object> { ["type"] = "proceed" });
+        // if (room != null && GodotObject.IsInstanceValid(room) && room.ProceedButton?.IsEnabled == true)
+        //     commands.Add(new Dictionary<string, object> { ["type"] = "proceed" });
 
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+
     {
-        if (actionType == "proceed")
+        if (action.Name == "proceed")
             return await Proceed();
         return null;
     }
 
-    private async Task<string> Proceed()
+    private async Task<ActionResult.Result> Proceed()
     {
         var room = TreasureRoomAutoPatch.CurrentRoom;
         if (room == null || !GodotObject.IsInstanceValid(room))
@@ -72,4 +76,10 @@ public class TreasureHandler : IContextHandler
         Plugin.Log("Clicked proceed on treasure room");
         return ActionResult.Ok("Proceeded from treasure room");
     }
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
+
 }

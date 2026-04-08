@@ -8,6 +8,9 @@ using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.RestSite;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
+using STS2NeuroIntegration;
+using NeuroSdk.Actions;
+using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 
 namespace Sts2Agent.Contexts;
@@ -34,9 +37,9 @@ public class RestSiteHandler : IContextHandler
         };
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        var commands = new List<ConstructedAction>();
         var restRoom = ctx.RestSiteRoom;
         if (restRoom == null) return commands;
 
@@ -44,26 +47,27 @@ public class RestSiteHandler : IContextHandler
         {
             if (opt.IsEnabled)
             {
-                commands.Add(new Dictionary<string, object>
-                {
-                    ["type"] = "rest_option",
-                    ["option"] = opt.OptionId,
-                    ["name"] = TextHelper.SafeLocString(() => opt.Title)
-                });
+                // commands.Add(new Dictionary<string, object>
+                // {
+                //     ["type"] = "rest_option",
+                //     ["option"] = opt.OptionId,
+                //     ["name"] = TextHelper.SafeLocString(() => opt.Title)
+                // });
             }
         }
 
         var nRestSiteRoom = FindNRestSiteRoom();
-        if (nRestSiteRoom?.ProceedButton?.IsEnabled == true)
-            commands.Add(new Dictionary<string, object> { ["type"] = "proceed" });
+        // if (nRestSiteRoom?.ProceedButton?.IsEnabled == true)
+        //     commands.Add(new Dictionary<string, object> { ["type"] = "proceed" });
 
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+
     {
-        if (actionType == "proceed") return await Proceed();
-        if (actionType != "rest_option") return null;
+        if (action.Name == "proceed") return await Proceed();
+        if (action.Name != "rest_option") return null;
 
         var option = root.GetProperty("option").GetString();
 
@@ -114,7 +118,7 @@ public class RestSiteHandler : IContextHandler
         return ActionResult.Ok("Rest option selected");
     }
 
-    private async Task<string> Proceed()
+    private async Task<ActionResult.Result> Proceed()
     {
         var nRestSiteRoom = FindNRestSiteRoom();
         if (nRestSiteRoom?.ProceedButton?.IsEnabled != true)
@@ -130,4 +134,10 @@ public class RestSiteHandler : IContextHandler
         var sceneRoot = SceneHelper.GetSceneRoot();
         return sceneRoot == null ? null : UiHelper.FindFirst<NRestSiteRoom>(sceneRoot);
     }
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
+
 }

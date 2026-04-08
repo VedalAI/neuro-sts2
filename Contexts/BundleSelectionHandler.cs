@@ -9,6 +9,9 @@ using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
+using STS2NeuroIntegration;
+using NeuroSdk.Actions;
+using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 
 namespace Sts2Agent.Contexts;
@@ -57,9 +60,9 @@ public class BundleSelectionHandler : IContextHandler
         };
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        var commands = new List<ConstructedAction>();
         var bundles = ctx.Bundles;
         if (bundles == null) return commands;
 
@@ -69,27 +72,28 @@ public class BundleSelectionHandler : IContextHandler
             if (bundle.Bundle == null) continue;
 
             var cardNames = string.Join(", ", bundle.Bundle.Select(c => c.Title));
-            commands.Add(new Dictionary<string, object>
-            {
-                ["type"] = "select_bundle",
-                ["bundleIndex"] = i,
-                ["cards"] = cardNames
-            });
+            // commands.Add(new Dictionary<string, object>
+            // {
+            //     ["type"] = "select_bundle",
+            //     ["bundleIndex"] = i,
+            //     ["cards"] = cardNames
+            // });
         }
 
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+
     {
-        return actionType switch
+        return action.Name switch
         {
             "select_bundle" => await SelectBundle(root, ctx),
             _ => null
         };
     }
 
-    private async Task<string> SelectBundle(JsonElement root, ContextInfo ctx)
+    private async Task<ActionResult.Result> SelectBundle(JsonElement root, ContextInfo ctx)
     {
         var bundleIndex = root.GetProperty("bundleIndex").GetInt32();
         var bundles = ctx.Bundles;
@@ -142,4 +146,10 @@ public class BundleSelectionHandler : IContextHandler
         Plugin.Log($"Selected bundle {bundleIndex} (overlay may still be closing)");
         return ActionResult.Ok("Bundle selected");
     }
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
+
 }

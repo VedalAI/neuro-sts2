@@ -9,6 +9,9 @@ using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using Sts2Agent.Utilities;
+using STS2NeuroIntegration;
+using NeuroSdk.Websocket;
+using NeuroSdk.Actions;
 
 namespace Sts2Agent.Contexts;
 
@@ -38,14 +41,14 @@ public class ShopHandler : IContextHandler
         return result;
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        var commands = new List<ConstructedAction>();
 
         if (!ctx.ShopIsOpen)
         {
-            commands.Add(new Dictionary<string, object> { ["type"] = "shop_open" });
-            commands.Add(new Dictionary<string, object> { ["type"] = "shop_leave" });
+            // commands.Add(new Dictionary<string, object> { ["type"] = "shop_open" });
+            // commands.Add(new Dictionary<string, object> { ["type"] = "shop_leave" });
             return commands;
         }
 
@@ -56,23 +59,24 @@ public class ShopHandler : IContextHandler
                 var entry = ctx.ShopItems[i];
                 if (entry.EnoughGold)
                 {
-                    commands.Add(new Dictionary<string, object>
-                    {
-                        ["type"] = "shop_buy",
-                        ["itemIndex"] = i,
-                        ["name"] = GetEntryName(entry)
-                    });
+                    // commands.Add(new Dictionary<string, object>
+                    // {
+                    //     ["type"] = "shop_buy",
+                    //     ["itemIndex"] = i,
+                    //     ["name"] = GetEntryName(entry)
+                    // });
                 }
             }
         }
 
-        commands.Add(new Dictionary<string, object> { ["type"] = "shop_leave" });
+        // commands.Add(new Dictionary<string, object> { ["type"] = "shop_leave" });
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+
     {
-        return actionType switch
+        return action.Name switch
         {
             "shop_open" => await ShopOpen(),
             "shop_buy" => await ShopBuy(root, ctx),
@@ -81,7 +85,7 @@ public class ShopHandler : IContextHandler
         };
     }
 
-    private async Task<string> ShopOpen()
+    private async Task<ActionResult.Result> ShopOpen()
     {
         var nRoom = NMerchantRoom.Instance;
         if (nRoom == null)
@@ -98,7 +102,7 @@ public class ShopHandler : IContextHandler
         return ActionResult.Ok("Shop opened");
     }
 
-    private async Task<string> ShopBuy(JsonElement root, ContextInfo ctx)
+    private async Task<ActionResult.Result> ShopBuy(JsonElement root, ContextInfo ctx)
     {
         var itemIndex = root.GetProperty("itemIndex").GetInt32();
         var items = ctx.ShopItems;
@@ -121,7 +125,7 @@ public class ShopHandler : IContextHandler
         return ActionResult.Ok("Item purchased");
     }
 
-    private async Task<string> ShopLeave()
+    private async Task<ActionResult.Result> ShopLeave()
     {
         // Shop leave: find proceed button
         var sceneRoot = SceneHelper.GetSceneRoot();
@@ -186,5 +190,10 @@ public class ShopHandler : IContextHandler
         if (entry is MerchantPotionEntry potionEntry)
             return TextHelper.SafeLocString(() => potionEntry.Model.Title);
         return "Remove Card";
+    }
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
     }
 }

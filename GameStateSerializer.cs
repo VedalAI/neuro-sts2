@@ -24,20 +24,20 @@ public static class GameStateSerializer
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    public static string Serialize()
+    public static Dictionary<string, object> Serialize()
     {
         try
         {
             var ctx = GameContext.Resolve();
             if (ctx == null)
-                return JsonSerializer.Serialize(new { error = "No active run" }, JsonOptions);
+                return new() { { "error", "No Active Run" } };
 
             var state = new Dictionary<string, object>();
 
             // Pre-run screens have no run state — handle separately
             if (ctx.Type is ContextType.CharacterSelect or ContextType.MainMenu)
             {
-                state["context"] = GetContextString(ctx.Type);
+                state["context"] = ctx.Type;
                 var preRunHandler = ActionExecutor.GetHandlers()
                     .FirstOrDefault(h => h.Type == ctx.Type);
                 if (preRunHandler != null)
@@ -49,7 +49,7 @@ public static class GameStateSerializer
                 }
                 // Drain any stale events on pre-run screens
                 EventLog.Clear();
-                return JsonSerializer.Serialize(state, JsonOptions);
+                return state;
             }
 
             // "context" reflects the underlying room type (preserving API format),
@@ -133,11 +133,11 @@ public static class GameStateSerializer
                 }).ToList();
             }
 
-            return JsonSerializer.Serialize(state, JsonOptions);
+            return state;
         }
         catch (Exception e)
         {
-            return JsonSerializer.Serialize(new { error = e.Message }, JsonOptions);
+            return new() { { "error", e.Message } };
         }
     }
 

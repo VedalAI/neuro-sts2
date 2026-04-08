@@ -10,6 +10,9 @@ using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
+using STS2NeuroIntegration;
+using NeuroSdk.Actions;
+using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 
 namespace Sts2Agent.Contexts;
@@ -77,9 +80,9 @@ public class CardSelectionHandler : IContextHandler
         return overlay;
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        var commands = new List<ConstructedAction>();
         var cardHolders = ctx.CardHolders;
         if (cardHolders == null) return commands;
 
@@ -97,35 +100,35 @@ public class CardSelectionHandler : IContextHandler
             var card = cardHolders[i].CardNode?.Model;
             if (card != null)
             {
-                commands.Add(new Dictionary<string, object>
-                {
-                    ["type"] = "select_card",
-                    ["cardIndex"] = i,
-                    ["card"] = card.Title.ToString()
-                });
+                // commands.Add(new Dictionary<string, object>
+                // {
+                //     ["type"] = "select_card",
+                //     ["cardIndex"] = i,
+                //     ["card"] = card.Title.ToString()
+                // });
             }
         }
 
         var canSkip = ctx.OverlayScreen is NCardRewardSelectionScreen;
         if (!canSkip && ctx.OverlayNode != null)
             canSkip = UiHelper.FindFirst<NChoiceSelectionSkipButton>(ctx.OverlayNode) != null;
-        if (canSkip)
-            commands.Add(new Dictionary<string, object> { ["type"] = "skip" });
+        // if (canSkip)
+        //     commands.Add(new Dictionary<string, object> { ["type"] = "skip" });
 
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
     {
-        return actionType switch
+        return action.Name switch
         {
             "select_card" => await SelectCard(root, ctx),
             "skip" => await Skip(ctx),
-            _ => null
+            _ => ActionResult.Error("Unknown Action")
         };
     }
 
-    private async Task<string> SelectCard(JsonElement root, ContextInfo ctx)
+    private async Task<ActionResult.Result> SelectCard(JsonElement root, ContextInfo ctx)
     {
         var cardIndex = root.GetProperty("cardIndex").GetInt32();
 
@@ -218,7 +221,7 @@ public class CardSelectionHandler : IContextHandler
         return ActionResult.Ok("Card selected");
     }
 
-    private async Task<string> Skip(ContextInfo ctx)
+    private async Task<ActionResult.Result> Skip(ContextInfo ctx)
     {
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
@@ -269,4 +272,10 @@ public class CardSelectionHandler : IContextHandler
         }
         Plugin.LogDebug("WaitForOverlayClose: timed out");
     }
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
+
 }

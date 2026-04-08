@@ -12,6 +12,9 @@ using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Agent.Utilities;
+using STS2NeuroIntegration;
+using NeuroSdk.Websocket;
+using NeuroSdk.Actions;
 
 namespace Sts2Agent.Contexts;
 
@@ -89,9 +92,10 @@ public class CombatHandler : IContextHandler
         return result;
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        return new();
+        var commands = new List<ConstructedAction>();
         var cm = CombatManager.Instance;
         if (cm == null || !cm.IsPlayPhase || cm.PlayerActionsDisabled) return commands;
 
@@ -104,38 +108,39 @@ public class CombatHandler : IContextHandler
             var card = pcs.Hand.Cards[i];
             if (card.CanPlay())
             {
-                commands.Add(new Dictionary<string, object>
-                {
-                    ["type"] = "play_card",
-                    ["cardIndex"] = i,
-                    ["card"] = card.Title.ToString(),
-                    ["requiresTarget"] = card.TargetType is TargetType.AnyEnemy or TargetType.AnyAlly
-                });
+                // commands.Add(new Dictionary<string, object>
+                // {
+                //     ["type"] = "play_card",
+                //     ["cardIndex"] = i,
+                //     ["card"] = card.Title.ToString(),
+                //     ["requiresTarget"] = card.TargetType is TargetType.AnyEnemy or TargetType.AnyAlly
+                // });
             }
         }
 
-        commands.Add(new Dictionary<string, object> { ["type"] = "end_turn" });
+        // commands.Add(new Dictionary<string, object> { ["type"] = "end_turn" });
 
         for (int i = 0; i < player.PotionSlots.Count; i++)
         {
             var potion = player.PotionSlots[i];
             if (potion != null)
             {
-                commands.Add(new Dictionary<string, object>
-                {
-                    ["type"] = "use_potion",
-                    ["slot"] = i,
-                    ["potion"] = TextHelper.SafeLocString(() => potion.Title)
-                });
+                // commands.Add(new Dictionary<string, object>
+                // {
+                //     ["type"] = "use_potion",
+                //     ["slot"] = i,
+                //     ["potion"] = TextHelper.SafeLocString(() => potion.Title)
+                // });
             }
         }
 
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+
     {
-        return actionType switch
+        return action.Name switch
         {
             "play_card" => await PlayCard(root, ctx),
             "end_turn" => EndTurn(ctx),
@@ -144,7 +149,7 @@ public class CombatHandler : IContextHandler
         };
     }
 
-    private async Task<string> PlayCard(JsonElement root, ContextInfo ctx)
+    private async Task<ActionResult.Result> PlayCard(JsonElement root, ContextInfo ctx)
     {
         var cm = CombatManager.Instance;
         if (cm == null) return ActionResult.Error("Not in combat");
@@ -202,7 +207,7 @@ public class CombatHandler : IContextHandler
         return ActionResult.Ok("Card played");
     }
 
-    private string EndTurn(ContextInfo ctx)
+    private ActionResult.Result EndTurn(ContextInfo ctx)
     {
         var cm = CombatManager.Instance;
         if (cm == null) return ActionResult.Error("Not in combat");
@@ -223,7 +228,7 @@ public class CombatHandler : IContextHandler
         return ActionResult.Ok("Turn ended");
     }
 
-    private string UsePotion(JsonElement root, ContextInfo ctx)
+    private ActionResult.Result UsePotion(JsonElement root, ContextInfo ctx)
     {
         var slot = root.GetProperty("slot").GetInt32();
         var player = LocalContext.GetMe(ctx.RunState.Players);
@@ -350,4 +355,10 @@ public class CombatHandler : IContextHandler
             ["description"] = TextHelper.GetPowerDescription(p)
         }).ToList();
     }
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
+
 }

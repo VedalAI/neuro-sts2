@@ -9,6 +9,9 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
 using MegaCrit.Sts2.Core.Runs;
+using STS2NeuroIntegration;
+using NeuroSdk.Actions;
+using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 
 namespace Sts2Agent.Contexts;
@@ -84,9 +87,9 @@ public class GameOverHandler : IContextHandler
         return result;
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        var commands = new List<ConstructedAction>();
 
         var screen = NOverlayStack.Instance?.Peek() as NGameOverScreen;
         if (screen == null)
@@ -95,26 +98,27 @@ public class GameOverHandler : IContextHandler
         var phase = GetPhase(screen);
         if (phase == Phase.MainMenu)
         {
-            commands.Add(new() { ["type"] = "continue" });
+            // commands.Add(new() { ["type"] = "continue" });
         }
         else
         {
             var continueBtn = UiHelper.FindFirst<NGameOverContinueButton>(screen);
-            if (continueBtn != null && continueBtn.IsEnabled)
-                commands.Add(new() { ["type"] = "continue" });
+            // if (continueBtn != null && continueBtn.IsEnabled)
+            //     commands.Add(new() { ["type"] = "continue" });
         }
 
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+
     {
-        if (actionType == "continue")
+        if (action.Name == "continue")
             return await AdvanceGameOver();
         return null;
     }
 
-    private async Task<string> AdvanceGameOver()
+    private async Task<ActionResult.Result> AdvanceGameOver()
     {
         var screen = await GodotMainThread.RunAsync(() =>
         {
@@ -152,4 +156,10 @@ public class GameOverHandler : IContextHandler
             return ActionResult.Ok("Returning to main menu");
         }
     }
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
+
 }

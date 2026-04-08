@@ -8,6 +8,9 @@ using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Localization;
 using Godot;
 using Sts2Agent.Utilities;
+using STS2NeuroIntegration;
+using NeuroSdk.Websocket;
+using NeuroSdk.Actions;
 
 namespace Sts2Agent.Contexts;
 
@@ -39,29 +42,30 @@ public class MapHandler : IContextHandler
         return result;
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        var commands = new List<ConstructedAction>();
         if (ctx.AvailableMapNodes == null) return commands;
 
         for (int i = 0; i < ctx.AvailableMapNodes.Count; i++)
         {
             var node = ctx.AvailableMapNodes[i];
-            commands.Add(new Dictionary<string, object>
-            {
-                ["type"] = "select_map_node",
-                ["index"] = i,
-                ["nodeType"] = GetMapPointName(node.PointType),
-                ["coord"] = new { row = node.coord.row, col = node.coord.col }
-            });
+            // commands.Add(new Dictionary<string, object>
+            // {
+            //     ["type"] = "select_map_node",
+            //     ["index"] = i,
+            //     ["nodeType"] = GetMapPointName(node.PointType),
+            //     ["coord"] = new { row = node.coord.row, col = node.coord.col }
+            // });
         }
 
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+
     {
-        if (actionType != "select_map_node") return null;
+        if (action.Name != "select_map_node") return null;
 
         var index = root.GetProperty("index").GetInt32();
         var nodes = ctx.AvailableMapNodes;
@@ -110,4 +114,10 @@ public class MapHandler : IContextHandler
         if (locKey == null) return pointType.ToString();
         return TextHelper.StripBBCode(new LocString("map", locKey + ".title").GetFormattedText());
     }
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
+
 }

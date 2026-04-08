@@ -10,6 +10,9 @@ using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Events;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
+using STS2NeuroIntegration;
+using NeuroSdk.Actions;
+using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 
 namespace Sts2Agent.Contexts;
@@ -83,9 +86,9 @@ public class EventContextHandler : IContextHandler
         return result;
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        var commands = new List<ConstructedAction>();
         var eventRoom = ctx.EventRoom;
         if (eventRoom == null) return commands;
 
@@ -94,7 +97,7 @@ public class EventContextHandler : IContextHandler
 
         if (evt.IsFinished)
         {
-            commands.Add(new Dictionary<string, object> { ["type"] = "proceed" });
+            // commands.Add(new Dictionary<string, object> { ["type"] = "proceed" });
         }
         else
         {
@@ -103,12 +106,12 @@ public class EventContextHandler : IContextHandler
                 var opt = evt.CurrentOptions[i];
                 if (!opt.IsLocked)
                 {
-                    commands.Add(new Dictionary<string, object>
-                    {
-                        ["type"] = "select_event_option",
-                        ["optionIndex"] = i,
-                        ["label"] = TextHelper.SafeLocString(() => opt.Title)
-                    });
+                    // commands.Add(new Dictionary<string, object>
+                    // {
+                    //     ["type"] = "select_event_option",
+                    //     ["optionIndex"] = i,
+                    //     ["label"] = TextHelper.SafeLocString(() => opt.Title)
+                    // });
                 }
             }
         }
@@ -116,9 +119,10 @@ public class EventContextHandler : IContextHandler
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+
     {
-        return actionType switch
+        return action.Name switch
         {
             "select_event_option" => await SelectEventOption(root, ctx),
             "proceed" => await Proceed(),
@@ -126,7 +130,7 @@ public class EventContextHandler : IContextHandler
         };
     }
 
-    private async Task<string> SelectEventOption(JsonElement root, ContextInfo ctx)
+    private async Task<ActionResult.Result> SelectEventOption(JsonElement root, ContextInfo ctx)
     {
         var optionIndex = root.GetProperty("optionIndex").GetInt32();
 
@@ -151,7 +155,7 @@ public class EventContextHandler : IContextHandler
         return ActionResult.Ok("Event option selected");
     }
 
-    private async Task<string> Proceed()
+    private async Task<ActionResult.Result> Proceed()
     {
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
@@ -209,4 +213,10 @@ public class EventContextHandler : IContextHandler
             return false;
         }
     }
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
+
 }

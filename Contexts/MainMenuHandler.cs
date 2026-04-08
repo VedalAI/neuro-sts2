@@ -9,7 +9,12 @@ using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves;
+using STS2NeuroIntegration;
+using NeuroSdk.Actions;
+using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
+using System.Text;
+using MegaCrit.Sts2.Core.Context;
 
 namespace Sts2Agent.Contexts;
 
@@ -27,9 +32,9 @@ public class MainMenuHandler : IContextHandler
         return result;
     }
 
-    public List<Dictionary<string, object>> GetCommands(ContextInfo ctx)
+    public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
-        var commands = new List<Dictionary<string, object>>();
+        var commands = new List<ConstructedAction>();
 
         var sceneRoot = SceneHelper.GetSceneRoot();
         var mainMenu = sceneRoot != null ? UiHelper.FindFirst<NMainMenu>(sceneRoot) : null;
@@ -39,23 +44,55 @@ public class MainMenuHandler : IContextHandler
         {
             var continueBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton");
             if (continueBtn != null && continueBtn.IsEnabled)
-                commands.Add(new Dictionary<string, object> { ["type"] = "continue_run" });
+                commands.Add(new("continue_run", "Continue your Last run"));
 
             var abandonBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/AbandonRunButton");
             if (abandonBtn != null && abandonBtn.IsEnabled)
-                commands.Add(new Dictionary<string, object> { ["type"] = "abandon_run" });
+                commands.Add(new("abandon_run", "Abandon your Last run"));
         }
         else
         {
             var spButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton");
             if (spButton != null && spButton.IsEnabled)
-                commands.Add(new Dictionary<string, object> { ["type"] = "start_run" });
+                commands.Add(new("start_run", "Start a new run"));
         }
 
         return commands;
     }
 
-    public async Task<string>? TryExecute(string actionType, JsonElement root, ContextInfo ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        parsedData = new Dictionary<string, object>();
+        var sceneRoot = SceneHelper.GetSceneRoot();
+        var mainMenu = sceneRoot != null ? UiHelper.FindFirst<NMainMenu>(sceneRoot) : null;
+        if (mainMenu == null) return ExecutionResult.Failure("Not in Main Menu can't call this action");
+        switch (action.Name)
+        {
+            case "continue_run":
+                var continueBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton");
+                if (continueBtn != null && continueBtn.IsEnabled)
+                    return ExecutionResult.Success();
+                else
+                    return ExecutionResult.ModFailure("Can't continue run if no previous run exists");
+            case "abandon_run":
+                var abandonBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/AbandonRunButton");
+                if (abandonBtn != null && abandonBtn.IsEnabled)
+                    return ExecutionResult.Success();
+                else
+                    return ExecutionResult.ModFailure("Can't abandon run if no previous run exists");
+            case "start_run":
+                var spButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton");
+                if (spButton != null && spButton.IsEnabled)
+                    return ExecutionResult.Success();
+                else
+                    return ExecutionResult.ModFailure("can't start run. A run is already active");
+
+
+        }
+
+        return ExecutionResult.Failure("Unknown Action called in Main Menu");
+    }
+    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement ParsedData, ContextInfo ctx)
     {
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
@@ -65,7 +102,7 @@ public class MainMenuHandler : IContextHandler
         if (mainMenu == null)
             return ActionResult.Error("Main menu not found");
 
-        if (actionType == "continue_run")
+        if (action.Name == "continue_run")
         {
             var continueBtn = await GodotMainThread.RunAsync(() =>
                 mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton"));
@@ -86,7 +123,7 @@ public class MainMenuHandler : IContextHandler
             return ActionResult.Ok("Continued saved run");
         }
 
-        if (actionType == "abandon_run")
+        if (action.Name == "abandon_run")
         {
             var abandonBtn = await GodotMainThread.RunAsync(() =>
                 mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/AbandonRunButton"));
@@ -113,7 +150,7 @@ public class MainMenuHandler : IContextHandler
             return ActionResult.Ok("Abandoned saved run");
         }
 
-        if (actionType == "start_run")
+        if (action.Name == "start_run")
         {
             // Click the singleplayer button
             var spButton = await GodotMainThread.RunAsync(() =>
@@ -151,12 +188,19 @@ public class MainMenuHandler : IContextHandler
             // Wait for character select screen to appear
             for (int i = 0; i < 30; i++)
             {
-                await Task.Delay(200);
+                await Task.Delay(100);
                 var cs = await GodotMainThread.RunAsync(() =>
                     UiHelper.FindFirst<NCharacterSelectScreen>(sceneRoot));
                 if (cs != null && cs.Visible)
                 {
                     Plugin.Log("Navigated to character select via singleplayer submenu");
+                    await Task.Delay(100);
+                    StringBuilder starting_character = new();
+                    var first_character = cs.GetNode<Control>("CharSelectButtons/ButtonContainer").GetChild<NCharacterSelectButton>(0);
+                    starting_character.AppendLine($"# Selected {TextHelper.StripBBCode(first_character.Character.Title.GetFormattedText())}");
+                    starting_character.ReprecentStartingCharacter(first_character.Character);
+
+                    NeuroIntegration.SendContext(starting_character.ToString());
                     return ActionResult.Ok("Navigated to character select");
                 }
             }
@@ -166,4 +210,5 @@ public class MainMenuHandler : IContextHandler
 
         return null;
     }
+
 }
