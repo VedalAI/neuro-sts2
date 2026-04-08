@@ -16,7 +16,7 @@ public interface IContextHandler
     {
         return $"You are in {Type}";
     }
-
+    [Obsolete("Get Context is now used to Serialize the state for Neuro, As Json isn't pretty")]
     Dictionary<string, object>? SerializeState(ContextInfo ctx);
 
     List<ConstructedAction> GetCommands(ContextInfo ctx);

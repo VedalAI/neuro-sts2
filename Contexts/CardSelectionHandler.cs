@@ -81,6 +81,11 @@ public class CardSelectionHandler : IContextHandler
         return overlay;
     }
 
+
+    public string GetContext(ContextInfo ctx)
+    {
+        return "You need to select a card";
+    }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
@@ -95,14 +100,42 @@ public class CardSelectionHandler : IContextHandler
             if (tcsField != null && tcsField.GetValue(ctx.OverlayScreen) == null)
                 return commands;
         }
-        commands.Add(new("select_card", "Select a available card", new()
+        var min_select = 1;
+        var max_select = 1;
+        var prefsField = ctx.OverlayScreen?.GetType().GetField("_prefs",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (prefsField != null)
         {
-            Type = NeuroSdk.Json.JsonSchemaType.Object,
-            Required = ["card"],
-            Properties = {
-                ["card"] = QJS.Enum(cardHolders.Select((x)=> x.CardNode!.Model!.Title).Distinct()),
+            try
+            {
+                dynamic prefs = prefsField.GetValue(ctx.OverlayScreen)!;
+                min_select = (int)prefs.MinSelect;
+                max_select = (int)prefs.MaxSelect;
             }
-        }));
+            catch { }
+        }
+        if (min_select >= 0)
+        {
+            commands.Add(new("select_multiple_cards", min_select != max_select ? $"Select {min_select} up to {max_select} cards" : $"Select {max_select} cards", new()
+            {
+                Type = JsonSchemaType.Array,
+                MinItems = min_select,
+                MaxItems = max_select,
+                Items = QJS.Enum(cardHolders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
+            }, true));
+        }
+        else
+        {
+            commands.Add(new("select_card", "Select a available card", new()
+            {
+                Type = JsonSchemaType.Object,
+                Required = ["card"],
+                Properties = {
+                ["card"] = QJS.Enum(cardHolders.Select((x)=> x.CardNode!.Model!.Title).Distinct()),
+                }
+            }, true));
+
+        }
 
         var canSkip = ctx.OverlayScreen is NCardRewardSelectionScreen;
         if (!canSkip && ctx.OverlayNode != null)
@@ -118,6 +151,7 @@ public class CardSelectionHandler : IContextHandler
         return action.Name switch
         {
             "select_card" => await SelectCard(root, ctx),
+            "select_multiple_cards" => await SelectMultipleCards(ctx, root),
             "skip" => await Skip(ctx),
             _ => ActionResult.Error("Unknown Action")
         };
@@ -130,7 +164,7 @@ public class CardSelectionHandler : IContextHandler
         {
             return ExecutionResult.Success();
         }
-        else
+        else if (action.Name == "select_card")
         {
             var cardIndex = data.Data?["card"]?.GetValue<string>();
             if (cardIndex == null)
@@ -150,6 +184,35 @@ public class CardSelectionHandler : IContextHandler
             }
             return ExecutionResult.Success();
         }
+        else if (action.Name == "select_multiple_cards")
+        {
+
+            var all_nodes = new List<NCardHolder>();
+            var cardIndex = data.Data?.AsArray();
+            if (cardIndex == null)
+            {
+                return ExecutionResult.Failure("Missing Parameter cards");
+            }
+            if (ctx?.OverlayScreen == null || ctx.OverlayNode == null)
+                return ExecutionResult.Failure("No card selection screen open");
+            var holders = ctx.CardHolders;
+            if (holders == null)
+                return ExecutionResult.Failure($"Card index {cardIndex} out of range (available: {holders?.Count ?? 0})");
+            foreach (var item in cardIndex)
+            {
+                var cardName = item.GetValue<string>();
+
+                var holder = holders.FirstOrDefault((x) => x.CardNode.Model.Title == cardName && !all_nodes.Contains(x));
+                if (holder == null)
+                {
+                    return ExecutionResult.Failure($"Not Enough of {cardName} in Deck. Select fewer and or a different card");
+                }
+                all_nodes.Add(holder);
+            }
+            return ExecutionResult.Success();
+        }
+
+        return ExecutionResult.Failure("Unkown Action");
     }
     private async Task<ActionResult.Result> SelectCard(JsonElement root, ContextInfo ctx)
     {
@@ -246,6 +309,108 @@ public class CardSelectionHandler : IContextHandler
 
         Plugin.Log($"Selected card {cardIndex}");
         return ActionResult.Ok("Card selected");
+    }
+
+    private async Task<ActionResult.Result> SelectMultipleCards(ContextInfo ctx, JsonElement root)
+    {
+
+        var all_selected_nodes = new List<NCardHolder>();
+        foreach (var item in root.EnumerateArray())
+        {
+            Plugin.LogDebug(item.ToString());
+            var cardName = item.GetString();
+
+
+            if (ctx.OverlayScreen == null || ctx.OverlayNode == null)
+                return ActionResult.Error("No card selection screen open");
+
+            // Wait for _completionSource to be set
+            var tcsField = ctx.OverlayScreen.GetType().GetField("_completionSource",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (tcsField != null)
+            {
+                for (int attempt = 0; attempt < 10; attempt++)
+                {
+                    if (tcsField.GetValue(ctx.OverlayScreen) != null) break;
+                    await Task.Delay(100);
+                }
+                if (tcsField.GetValue(ctx.OverlayScreen) == null)
+                    return ActionResult.Error("Card selection screen not ready (_completionSource is null)");
+            }
+
+            var holders = ctx.CardHolders;
+            if (holders == null)
+                return ActionResult.Error($"Card index {cardName} out of range (available: {holders?.Count ?? 0})");
+
+            var holder = holders.First((x) => x.CardNode.Model.Title == cardName && !all_selected_nodes.Contains(x));
+            if (holder == null)
+            {
+                return ActionResult.Error($"Card name {cardName} not in deck");
+            }
+            all_selected_nodes.Add(holder);
+            var isGridScreen = ctx.IsGridScreen;
+            var grid = isGridScreen && ctx.OverlayNode != null
+                ? UiHelper.FindFirst<NCardGrid>(ctx.OverlayNode) : null;
+
+            // Emit signal on main thread
+            var completed = await Task.WhenAny(
+                GodotMainThread.RunAsync(() =>
+                {
+                    if (grid != null)
+                        grid.EmitSignal(NCardGrid.SignalName.HolderPressed, holder);
+                    else
+                        holder.EmitSignal(NCardHolder.SignalName.Pressed, holder);
+                }),
+                Task.Delay(1000));
+
+            if (completed is Task<bool> { IsCompletedSuccessfully: false })
+                return ActionResult.Error("SelectCard timed out emitting signal");
+
+            // Non-grid: click completes selection, wait for close
+            if (!isGridScreen)
+            {
+                await WaitForOverlayClose(ctx.OverlayNode, ctx.OverlayScreen);
+                Plugin.Log($"Selected card {cardName}");
+                return ActionResult.Ok("Card selected");
+            }
+
+            // Grid: check if auto-closed
+            await Task.Delay(200);
+            if (!GodotObject.IsInstanceValid(ctx.OverlayNode) || NOverlayStack.Instance?.Peek() != ctx.OverlayScreen)
+            {
+                Plugin.LogDebug($"Selected card {cardName} (screen auto-closed)");
+                return ActionResult.Ok("Card selected");
+            }
+
+            // Check for confirm button
+            var confirmButtons = UiHelper.FindAll<NConfirmButton>(ctx.OverlayNode);
+            NConfirmButton? enabledButton = confirmButtons.FirstOrDefault(b => b.IsEnabled);
+
+            if (enabledButton == null)
+            {
+                for (int i = 0; i < 5; i++)
+                {
+                    await Task.Delay(100);
+                    enabledButton = confirmButtons.FirstOrDefault(b => b.IsEnabled);
+                    if (enabledButton != null) break;
+                }
+            }
+
+            if (enabledButton != null)
+            {
+                await Task.Delay(2000);
+                await GodotMainThread.ClickAsync(enabledButton);
+                Plugin.LogDebug("SelectCard: clicked confirm button");
+                await WaitForOverlayClose(ctx.OverlayNode, ctx.OverlayScreen);
+            }
+            else
+            {
+                Plugin.LogDebug("SelectCard: partial selection (no confirm enabled yet)");
+            }
+
+            Plugin.Log($"Selected card {cardName}");
+        }
+        return ActionResult.Ok("Cards selected");
     }
 
     private async Task<ActionResult.Result> Skip(ContextInfo ctx)

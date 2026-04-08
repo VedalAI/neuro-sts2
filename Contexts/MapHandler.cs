@@ -11,6 +11,9 @@ using Sts2Agent.Utilities;
 using STS2NeuroIntegration;
 using NeuroSdk.Websocket;
 using NeuroSdk.Actions;
+using System.Text;
+using NeuroSdk.Json;
+using MegaCrit.Sts2.Core.Models.Cards;
 
 namespace Sts2Agent.Contexts;
 
@@ -42,37 +45,81 @@ public class MapHandler : IContextHandler
         return result;
     }
 
+    public string GetContext(ContextInfo ctx)
+    {
+        StringBuilder mapBuilder = new();
+        mapBuilder.AppendLine($"# You are on the map about to travel somewhere, Act {ctx.RunState.CurrentActIndex + 1}");
+        mapBuilder.AppendLine($"Your current position is: {ctx.RunState?.CurrentMapCoord.ToString()}");
+        mapBuilder.AppendLine($"You can travel to these locations:");
+        foreach (var coords in ctx.AvailableMapNodes ?? [])
+        {
+            mapBuilder.AppendLine($"- [{coords.coord.row},{coords.coord.col}] {GetMapPointName(coords.PointType)}");
+        }
+        return mapBuilder.ToString();
+    }
+
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
         if (ctx.AvailableMapNodes == null) return commands;
 
-        for (int i = 0; i < ctx.AvailableMapNodes.Count; i++)
+        commands.Add(new("select_map_node", "Select a point to travel to", new()
         {
-            var node = ctx.AvailableMapNodes[i];
-            // commands.Add(new Dictionary<string, object>
-            // {
-            //     ["type"] = "select_map_node",
-            //     ["index"] = i,
-            //     ["nodeType"] = GetMapPointName(node.PointType),
-            //     ["coord"] = new { row = node.coord.row, col = node.coord.col }
-            // });
-        }
+            Type = NeuroSdk.Json.JsonSchemaType.Object,
+            Required = ["coord"],
+            Properties =
+            {
+                ["coord"]= QJS.Enum(ctx.AvailableMapNodes.Select((node)=> $"{node.coord.row},{node.coord.col}"))
+            }
+        }));
+
 
         return commands;
     }
 
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        parsedData = data.Data;
+        if (data.Data?["coord"]?.GetValue<string>() == null)
+        {
+            return ExecutionResult.Failure("missing parameter \"coord\"");
+        }
+        var index = data.Data["coord"]!.GetValue<string>();
+        var coord = index.Split(",");
+        if (coord.Length <= 0 || coord.Length > 2)
+        {
+            return ExecutionResult.Failure("coord is malformed");
+        }
+        try
+        {
+            var target = ctx.AvailableMapNodes.Find((x) => x.coord.row == int.Parse(coord[0]) && x.coord.col == int.Parse(coord[1]));
+            if (target == null)
+            {
+                return ExecutionResult.Failure("Couldn't find specified node");
+            }
+
+        }
+        catch (Exception e)
+        {
+            return ExecutionResult.Failure($"Failed to validate coord {e.Message}");
+        }
+        return ExecutionResult.Success();
+    }
     public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
         if (action.Name != "select_map_node") return null;
 
-        var index = root.GetProperty("index").GetInt32();
+        var index = root.GetProperty("coord").GetString();
+        var coord = index.Split(",");
         var nodes = ctx.AvailableMapNodes;
-        if (nodes == null || index < 0 || index >= nodes.Count)
-            return ActionResult.Error($"Map node index {index} out of range (available: {nodes?.Count ?? 0})");
 
-        var target = nodes[index];
+        var target = nodes.Find((x) => x.coord.row == int.Parse(coord[0]) && x.coord.col == int.Parse(coord[1]));
+        if (target == null)
+        {
+            return ActionResult.Error("Couldn't find specified node");
+        }
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
             return ActionResult.Error("Cannot access scene tree");
@@ -113,11 +160,6 @@ public class MapHandler : IContextHandler
         };
         if (locKey == null) return pointType.ToString();
         return TextHelper.StripBBCode(new LocString("map", locKey + ".title").GetFormattedText());
-    }
-
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
-    {
-        throw new NotImplementedException();
     }
 
 }

@@ -72,6 +72,12 @@ public class NeuroIntegration : Node
   {
 
     var CurrentState = GameStateSerializer.Serialize();
+    var ctx = GameContext.Resolve();
+    if (ctx == null)
+    {
+      Plugin.LogError("Context is Invalid");
+      return;
+    }
     Plugin.LogDebug($"current state: {JsonSerializer.Serialize(CurrentState, JsonOptions)}");
 
     if (CurrentState.TryGetValue("error", out var error))
@@ -79,10 +85,18 @@ public class NeuroIntegration : Node
       Context.Send(JsonSerializer.Serialize(error, JsonOptions));
       //TODO: Handle Error Properly
     }
+    var handler = ActionExecutor.GetHandlers()
+    .FirstOrDefault(h => h.Type == ctx.Type);
 
-    if (CurrentState.TryGetValue("available_commands", out var cmds) && cmds is List<ConstructedAction> CommandsList)
+    if (handler == null)
     {
-      var ctx = GameContext.Resolve();
+      Plugin.LogError($"Current selected Handler is unvalid. not found for type: {ctx?.Type}");
+      return;
+    }
+
+
+    if (handler.GetCommands(ctx) is List<ConstructedAction> CommandsList)
+    {
       if (ctx == null)
       {
         Plugin.LogError("Couldn't resolve current Context");
