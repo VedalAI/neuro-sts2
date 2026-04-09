@@ -114,15 +114,18 @@ public class CardSelectionHandler : IContextHandler
             }
             catch { }
         }
-        if (min_select >= 0)
+        if (max_select > 1)
         {
-            commands.Add(new("select_multiple_cards", min_select != max_select ? $"Select {min_select} up to {max_select} cards" : $"Select {max_select} cards", new()
+            commands.Add(new("select_multiple_cards", min_select != max_select ? $"Select {min_select} up to {max_select} cards" : $"Select {max_select} cards", QJS.WrapObject(new Dictionary<string, JsonSchema>
             {
-                Type = JsonSchemaType.Array,
-                MinItems = min_select,
-                MaxItems = max_select,
-                Items = QJS.Enum(cardHolders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
-            }));
+                ["cards"] = new()
+                {
+                    Type = JsonSchemaType.Array,
+                    MinItems = min_select,
+                    MaxItems = max_select,
+                    Items = QJS.Enum(cardHolders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
+                }
+            })));
         }
         else
         {
@@ -188,7 +191,7 @@ public class CardSelectionHandler : IContextHandler
         {
 
             var all_nodes = new List<NCardHolder>();
-            var cardIndex = data.Data?.AsArray();
+            var cardIndex = data.Data?["cards"]?.GetValue<string[]>();
             if (cardIndex == null)
             {
                 return ExecutionResult.Failure("Missing Parameter cards");
@@ -200,7 +203,7 @@ public class CardSelectionHandler : IContextHandler
                 return ExecutionResult.Failure($"Card index {cardIndex} out of range (available: {holders?.Count ?? 0})");
             foreach (var item in cardIndex)
             {
-                var cardName = item.GetValue<string>();
+                var cardName = item;
 
                 var holder = holders.FirstOrDefault((x) => x.CardNode.Model.Title == cardName && !all_nodes.Contains(x));
                 if (holder == null)

@@ -85,6 +85,7 @@ namespace NeuroSdk.Actions
             NeuroActionHandler.RegisterActions(_actions);
 
             CurrentState = State.Registered;
+            NGamePatch.Process += Process;
         }
 
         #endregion
@@ -263,14 +264,15 @@ namespace NeuroSdk.Actions
             }
         }
 
-        public override void _ExitTree()
-        {
-            if (CurrentState == State.Ended) return;
-            End();
-        }
+        // public override void _ExitTree()
+        // {
+        //     if (CurrentState == State.Ended) return;
+        //     End();
+        // }
 
         public void End()
         {
+            NGamePatch.Process -= Process;
             if (CurrentState >= State.Ended) return;
 
             NeuroActionHandler.UnregisterActions(_actions);
@@ -284,7 +286,7 @@ namespace NeuroSdk.Actions
 
         #region Handling
 
-        public override void _Process(double delta)
+        public void Process()
         {
             if (CurrentState != State.Registered) return;
 

@@ -10,6 +10,8 @@ using STS2NeuroIntegration;
 using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
+using NeuroSdk.Json;
+using System.Text;
 
 namespace Sts2Agent.Contexts;
 
@@ -66,6 +68,28 @@ public class HandSelectionHandler : IContextHandler
         return overlay;
     }
 
+
+    public string GetContext(ContextInfo ctx)
+    {
+        StringBuilder stringBuilder = new();
+        stringBuilder.AppendLine("You need to Select Cards from your hand.");
+        var hand = ctx.Hand;
+        if (hand == null) return stringBuilder.ToString();
+        if (ReflectionCache.HandPrefs != null)
+        {
+            try
+            {
+                dynamic prefs = ReflectionCache.HandPrefs.GetValue(hand)!;
+                stringBuilder.AppendLine(TextHelper.StripBBCode(
+                    ((MegaCrit.Sts2.Core.Localization.LocString)prefs.Prompt).GetFormattedText()));
+                stringBuilder.AppendLine(prefs.MinSelect != prefs.MaxSelect ? $"Select {prefs.MinSelect} up to {prefs.MinSelect} cards" : $"Select {prefs.MaxSelect} cards");
+            }
+            catch { }
+        }
+        return stringBuilder.ToString();
+
+    }
+
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
@@ -73,27 +97,47 @@ public class HandSelectionHandler : IContextHandler
         if (hand == null) return commands;
 
         var holders = GetVisibleHolders(hand);
-        for (int i = 0; i < holders.Count; i++)
+        var min_select = 0;
+        var max_select = 1;
+
+        if (ReflectionCache.HandPrefs != null)
         {
-            var card = holders[i].CardNode!.Model;
-            // commands.Add(new Dictionary<string, object>
-            // {
-            //     ["type"] = "choose_hand_cards",
-            //     ["cardIndex"] = i,
-            //     ["card"] = card.Title.ToString()
-            // });
+            try
+            {
+                dynamic prefs = ReflectionCache.HandPrefs.GetValue(hand)!;
+                min_select = (int)prefs.MinSelect;
+                max_select = (int)prefs.MaxSelect;
+            }
+            catch
+            {
+                Plugin.LogError("Couldn't Figure out how many Cards needed to be selected, falling back to maximum selection");
+                max_select = holders.Count;
+            }
         }
+        commands.Add(new("select_multiple_cards", min_select != max_select ? $"Select {min_select} up to {max_select} cards" : $"Select {max_select} cards", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+        {
+            ["cards"] = {
+                    Type = JsonSchemaType.Array,
+                    MinItems = min_select,
+                    MaxItems = max_select,
+                    Items = QJS.Enum(holders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
+                }
+        })));
+
 
         if (ReflectionCache.HandConfirmButton != null)
         {
-            var confirmButton = ReflectionCache.HandConfirmButton.GetValue(hand) as NConfirmButton;
-            // if (confirmButton != null && confirmButton.IsEnabled)
-            //     commands.Add(new Dictionary<string, object> { ["type"] = "confirm_selection" });
+            if (ReflectionCache.HandConfirmButton.GetValue(hand) is NConfirmButton confirmButton && confirmButton.IsEnabled)
+                commands.Add(new("confirm_selection", "Confirm your Selection of Cards and Proceed"));
         }
 
         return commands;
     }
 
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
     public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
@@ -153,11 +197,6 @@ public class HandSelectionHandler : IContextHandler
             .OfType<NHandCardHolder>()
             .Where(h => h.Visible && h.CardNode?.Model != null)
             .ToList();
-    }
-
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
-    {
-        throw new NotImplementedException();
     }
 
 }

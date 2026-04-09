@@ -19,7 +19,7 @@ public static class TextHelper
             return text;
 
         text = ImgTagRegex.Replace(text, match => GetLocalizedIconText(match.Groups[1].Value));
-        return BbCodeRegex.Replace(text, "").Trim();
+        return BbCodeRegex.Replace(text, "").Replace("\n", " ").Trim();
     }
 
     public static string GetUnformatedText(this LocString locString)
@@ -66,6 +66,7 @@ public static class TextHelper
         }
         catch
         {
+            Plugin.LogError($"Couldn't resolve Card description for card: {card.Title}");
             return SafeLocString(() => card.Description);
         }
     }

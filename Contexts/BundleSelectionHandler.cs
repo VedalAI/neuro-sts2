@@ -60,6 +60,11 @@ public class BundleSelectionHandler : IContextHandler
         };
     }
 
+
+    public string GetContext(ContextInfo ctx)
+    {
+        throw new NotImplementedException();
+    }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
@@ -151,5 +156,4 @@ public class BundleSelectionHandler : IContextHandler
     {
         throw new NotImplementedException();
     }
-
 }

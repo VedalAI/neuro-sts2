@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -7,6 +8,7 @@ using NeuroSdk.Actions;
 using NeuroSdk.Messages.Outgoing;
 using Sts2Agent;
 using Sts2Agent.Contexts;
+using Sts2Agent.Utilities;
 namespace STS2NeuroIntegration;
 
 public class NeuroIntegration : Node
@@ -63,28 +65,39 @@ public class NeuroIntegration : Node
     }
   }
 
+  /// <summary>
+  /// Simple Wrapper for NeuroSdk.Messages.Outgoing.Context to make namespace collisions not happen when importing Context.
+  /// </summary>
+  /// <param name="message"></param>
+  /// <param name="silent"></param>
   public static void SendContext(string message, bool silent = false)
   {
     Context.Send(message, silent);
   }
 
+  ContextType lastContext = ContextType.Unknown;
   public void HandleDecisionPoint()
   {
 
-    var CurrentState = GameStateSerializer.Serialize();
     var ctx = GameContext.Resolve();
     if (ctx == null)
     {
       Plugin.LogError("Context is Invalid");
       return;
     }
-    Plugin.LogDebug($"current state: {JsonSerializer.Serialize(CurrentState, JsonOptions)}");
-
-    if (CurrentState.TryGetValue("error", out var error))
+    if (lastContext != ctx.Type)
     {
-      Context.Send(JsonSerializer.Serialize(error, JsonOptions));
-      //TODO: Handle Error Properly
+
+      StringBuilder stringBuilder = new();
+      //Drain Any pending Events that happened. can happen when switching Context at the end of a Action. like Combat
+      stringBuilder.RepresentEvents(EventLog.DrainAll());
+      if (stringBuilder.Length > 0)
+      {
+        SendContext($"These Events happened During a Context Switch:\n{stringBuilder}");
+      }
+      lastContext = ctx.Type;
     }
+
     var handler = ActionExecutor.GetHandlers()
     .FirstOrDefault(h => h.Type == ctx.Type);
 
@@ -120,6 +133,7 @@ public class NeuroIntegration : Node
         }
       }
       NeuroActionHandler.RegisterActions(new_global_actions);
+      window.SetForce(5, "It's your Turn please do an Action", null);
       window.Register();
     }
     else

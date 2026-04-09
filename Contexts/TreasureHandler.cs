@@ -82,4 +82,8 @@ public class TreasureHandler : IContextHandler
         throw new NotImplementedException();
     }
 
+    public string GetContext(ContextInfo ctx)
+    {
+        throw new NotImplementedException();
+    }
 }

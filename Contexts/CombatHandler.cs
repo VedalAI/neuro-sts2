@@ -27,76 +27,6 @@ public class CombatHandler : IContextHandler
     public ContextType Type => ContextType.Combat;
     bool firstContext = true;
 
-    public Dictionary<string, object>? SerializeState(ContextInfo ctx)
-    {
-        var combatState = ctx.CombatState;
-        if (combatState == null) return null;
-
-        var player = LocalContext.GetMe(ctx.RunState.Players);
-        var pcs = player.PlayerCombatState;
-        var result = new Dictionary<string, object>
-        {
-            ["round"] = combatState.RoundNumber,
-            ["currentSide"] = combatState.CurrentSide.ToString()
-        };
-
-        if (pcs != null)
-        {
-            result["energy"] = pcs.Energy;
-            result["stars"] = pcs.Stars;
-            result["hand"] = pcs.Hand.Cards
-                .Select((c, i) => SerializeCardInHand(c, i))
-                .ToList();
-            result["drawPileCount"] = pcs.DrawPile.Cards.Count;
-            result["discardPileCount"] = pcs.DiscardPile.Cards.Count;
-            result["exhaustPileCount"] = pcs.ExhaustPile.Cards.Count;
-
-            var orbQueue = pcs.OrbQueue;
-            if (orbQueue != null && orbQueue.Capacity > 0)
-            {
-                result["orbSlots"] = orbQueue.Capacity;
-                result["orbs"] = orbQueue.Orbs.Select((orb, i) => new Dictionary<string, object>
-                {
-                    ["index"] = i,
-                    ["name"] = TextHelper.SafeLocString(() => orb.Title),
-                    ["passiveValue"] = orb.PassiveVal,
-                    ["evokeValue"] = orb.EvokeVal
-                }).ToList();
-            }
-        }
-
-        var playerCreature = player.Creature;
-        result["playerBlock"] = playerCreature.Block;
-        result["playerPowers"] = SerializePowers(playerCreature.Powers);
-
-        result["enemies"] = combatState.Enemies
-            .Where(e => e.IsAlive)
-            .Select((e, i) => SerializeEnemy(e, i, combatState))
-            .ToList();
-
-        // Companions (allied creatures that aren't the local player)
-        var companions = combatState.Allies
-            .Where(c => c.IsAlive && c != playerCreature)
-            .Select(c =>
-            {
-                var comp = new Dictionary<string, object>
-                {
-                    ["name"] = c.Name,
-                    ["hp"] = c.CurrentHp,
-                    ["maxHp"] = c.MaxHp,
-                    ["block"] = c.Block
-                };
-                if (c.Powers.Count > 0)
-                    comp["powers"] = SerializePowers(c.Powers);
-                return comp;
-            })
-            .ToList();
-        if (companions.Count > 0)
-            result["companions"] = companions;
-
-        return result;
-    }
-
     public string GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
@@ -138,9 +68,13 @@ public class CombatHandler : IContextHandler
             }
         }
         stringBuilder.AppendLine($"You currently have {player.Creature.CurrentHp} HP out of {player.Creature.MaxHp} maxhp and {player.Creature.Block} Block");
-        foreach (var power in player.Creature.Powers)
+        if (player.Creature.Powers.Count > 0)
         {
-            stringBuilder.AppendLine($"\t- A {TextHelper.SafeLocString(() => power.Title)} on you with {power.Amount} which does: \"{TextHelper.SafeLocString(() => power.Description)}\"");
+            stringBuilder.AppendLine($"You have {player.Creature.Powers.Count} Applied on yourself. The Powers are the following:");
+            foreach (var power in player.Creature.Powers)
+            {
+                stringBuilder.AppendLine($"\t- A {TextHelper.SafeLocString(() => power.Title)} on you with {power.Amount} which does: \"{TextHelper.SafeLocString(() => power.Description)}\"");
+            }
         }
 
         stringBuilder.AppendLine("");
@@ -172,25 +106,27 @@ public class CombatHandler : IContextHandler
         stringBuilder.AppendLine();
         stringBuilder.AppendLine($"You currently have {pcs.Hand.Cards.Count} Cards in hand");
         stringBuilder.RepresentDeck(pcs.Hand.Cards);
-        stringBuilder.AppendLine();
-        if (firstContext)
+        var events = EventLog.DrainAll();
+        if (events.Count > 0)
         {
-            if (combatState.RoundNumber > 1)
+
+            stringBuilder.AppendLine();
+            if (firstContext)
             {
-                stringBuilder.AppendLine($"After Your last turn, this happened:");
+                if (combatState.RoundNumber > 1)
+                {
+                    stringBuilder.AppendLine($"After Your last turn, this happened:");
+                }
+                else
+                {
+                    stringBuilder.AppendLine($"this happend at the start of combat:");
+                }
             }
             else
             {
-                stringBuilder.AppendLine($"this happend at the start of combat:");
+                stringBuilder.AppendLine($"This has happend after you played a card:");
             }
-        }
-        else
-        {
-            stringBuilder.AppendLine($"This has happend after you played a card:");
-        }
-        foreach (var eventBetweenRounds in EventLog.DrainAll())
-        {
-            stringBuilder.AppendLine($"- {eventBetweenRounds.Message}");
+            stringBuilder.RepresentEvents(events);
         }
         return stringBuilder.ToString();
 
@@ -447,32 +383,6 @@ public class CombatHandler : IContextHandler
         return ActionResult.Ok("Potion used");
     }
 
-    // Serialization helpers
-
-    private static Dictionary<string, object> SerializeCardInHand(CardModel card, int index)
-    {
-        var result = new Dictionary<string, object>
-        {
-            ["index"] = index,
-            ["name"] = card.Title,
-            ["description"] = TextHelper.GetCardDescription(card),
-            ["targetType"] = card.TargetType.ToString(),
-            ["playable"] = card.CanPlay()
-        };
-
-        if (card.EnergyCost != null)
-        {
-            if (card.EnergyCost.CostsX)
-                result["cost"] = "X";
-            else
-                result["cost"] = card.EnergyCost.GetWithModifiers(CostModifiers.All);
-        }
-
-        return result;
-    }
-
-
-
     private static void PrettyRenderEnemies(StringBuilder stringBuilder, IReadOnlyList<Creature> enemies, CombatState combatState)
     {
 
@@ -500,7 +410,7 @@ public class CombatHandler : IContextHandler
             {
                 stringBuilder.AppendLine($".");
             }
-            stringBuilder.Append("\t");
+            stringBuilder.Append("\t\t");
 
             if (enemy?.Monster is MonsterModel monster)
             {
@@ -511,90 +421,13 @@ public class CombatHandler : IContextHandler
                     foreach (var intent in intents)
                     {
                         stringBuilder.Append("\t\t\t- ");
-                        switch (intent)
-                        {
-                            case AttackIntent attackIntent:
-                                try
-                                {
-                                    var allies = combatState.Creatures.Where(c => c.Player != null);
-                                    stringBuilder.Append($"Attack with {attackIntent.GetTotalDamage(allies, enemy)} Damage");
-                                    if (attackIntent.Repeats > 1)
-                                    {
-                                        stringBuilder.AppendLine($" {attackIntent.Repeats} Times");
-                                    }
-                                    else
-                                    {
-                                        stringBuilder.AppendLine($"");
-                                    }
-                                }
-                                catch
-                                {
-                                }
-                                break;
-                            default:
-                                stringBuilder.AppendLine($"{intent.IntentType}");
-                                break;
-                        }
+                        var allies = combatState.Creatures.Where(c => c.Player != null);
+                        var hoverTip = intent.GetHoverTip(allies, enemy);
+                        stringBuilder.AppendLine($"{(hoverTip.Title != null ? ("[" + TextHelper.StripBBCode(hoverTip.Title) + "] ") : "")}{TextHelper.StripBBCode(hoverTip.Description)}");
                     }
                 }
             }
         }
-    }
-
-    private static Dictionary<string, object> SerializeEnemy(Creature enemy, int index, CombatState combatState)
-    {
-        var result = new Dictionary<string, object>
-        {
-            ["index"] = index,
-            ["hp"] = enemy.CurrentHp,
-            ["maxHp"] = enemy.MaxHp,
-            ["block"] = enemy.Block,
-            ["powers"] = SerializePowers(enemy.Powers)
-        };
-
-        var monster = enemy.Monster;
-        if (monster != null)
-        {
-            result["name"] = TextHelper.SafeLocString(() => monster.Title);
-
-            var intents = monster.NextMove?.Intents;
-            if (intents != null && intents.Count > 0)
-            {
-                result["intents"] = intents.Select(intent =>
-                {
-                    var intentDict = new Dictionary<string, object>
-                    {
-                        ["type"] = intent.IntentType.ToString()
-                    };
-
-                    if (intent is AttackIntent attackIntent)
-                    {
-                        try
-                        {
-                            var allies = combatState.Creatures.Where(c => c.Player != null);
-                            intentDict["damage"] = attackIntent.GetTotalDamage(allies, enemy);
-                            if (attackIntent.Repeats > 1)
-                                intentDict["hits"] = attackIntent.Repeats;
-                        }
-                        catch { }
-                    }
-
-                    return intentDict;
-                }).ToList();
-            }
-        }
-
-        return result;
-    }
-
-    private static List<Dictionary<string, object>> SerializePowers(IReadOnlyList<MegaCrit.Sts2.Core.Models.PowerModel> powers)
-    {
-        return powers.Select(p => new Dictionary<string, object>
-        {
-            ["name"] = TextHelper.SafeLocString(() => p.Title),
-            ["amount"] = p.Amount,
-            ["description"] = TextHelper.GetPowerDescription(p)
-        }).ToList();
     }
 
 }

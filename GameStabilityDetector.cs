@@ -128,7 +128,7 @@ public static class GameStabilityDetector
         {
             _wasStable = true;
             Plugin.Log("=== GAME STABLE ===");
-            Plugin.LogDebug(GameStateSerializer.Serialize().ToString());
+            // Plugin.LogDebug(GameStateSerializer.Serialize().ToString());
             OnBecameStable?.Invoke();
         }
         else if (stable && _wasStable)

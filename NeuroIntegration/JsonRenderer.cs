@@ -1,5 +1,6 @@
 using System.Text;
 using MegaCrit.Sts2.Core.Models;
+using Sts2Agent;
 using Sts2Agent.Utilities;
 
 namespace STS2NeuroIntegration;
@@ -26,15 +27,35 @@ public static class Renderer
         }
     }
 
-    public static void ReprecentStartingCharacter(this StringBuilder stringBuilder, CharacterModel character)
+    public static void RepresentStartingCharacter(this StringBuilder stringBuilder, CharacterModel character)
     {
 
         stringBuilder.AppendLine($"\"{TextHelper.GetCharacterDescription(character)}\"");
         stringBuilder.AppendLine("");
-        stringBuilder.AppendLine($"Starts with {character.StartingHp}hp and {character.StartingGold} gold");
+        stringBuilder.AppendLine($"Starts with {character.StartingHp} hp and {character.StartingGold} gold");
         stringBuilder.AppendLine($"Starting deck:");
         RepresentDeck(stringBuilder, character.StartingDeck);
         stringBuilder.AppendLine($"Starting with relics:");
         RepresentRelics(stringBuilder, character.StartingRelics);
+    }
+
+    public static void RepresentEvents(this StringBuilder stringBuilder, List<GameEvent> events)
+    {
+
+        var combinedEvents = events.GroupBy(x => x.Message);
+        foreach (var eventBetweenRounds in combinedEvents)
+        {
+            var firstEvent = eventBetweenRounds.First();
+            var count = eventBetweenRounds.Count();
+            if (count > 1)
+            {
+                stringBuilder.AppendLine($"- {firstEvent.Message}, {count} Times ");
+
+            }
+            else
+            {
+                stringBuilder.AppendLine($"- {firstEvent.Message}");
+            }
+        }
     }
 }

@@ -55,6 +55,18 @@ public class CharacterSelectHandler : IContextHandler
         return result;
     }
 
+
+    public string GetContext(ContextInfo ctx)
+    {
+        StringBuilder starting_character = new();
+        var first_character = ctx.CharacterButtons!.FirstOrDefault(c => c.IsSelected);
+        first_character ??= ctx.CharacterButtons!.First();
+        starting_character.AppendLine($"# Selected {TextHelper.StripBBCode(first_character.Character.Title.GetFormattedText())}");
+        starting_character.RepresentStartingCharacter(first_character.Character);
+
+        return starting_character.ToString();
+    }
+
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
@@ -135,7 +147,7 @@ public class CharacterSelectHandler : IContextHandler
             var character = btn.Character;
             StringBuilder character_descriptor = new();
             character_descriptor.AppendLine($"# Selected {name}");
-            character_descriptor.ReprecentStartingCharacter(character);
+            character_descriptor.RepresentStartingCharacter(character);
 
             GameStabilityDetector.ResetWasStable();
             Plugin.Log($"Selected character: {name}");

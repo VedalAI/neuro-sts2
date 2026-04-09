@@ -196,4 +196,9 @@ public class ShopHandler : IContextHandler
     {
         throw new NotImplementedException();
     }
+
+    public string GetContext(ContextInfo ctx)
+    {
+        throw new NotImplementedException();
+    }
 }

@@ -18,6 +18,8 @@ namespace NeuroSdk
     [HarmonyPatch(typeof(NGame), nameof(NGame._Notification))]
     public static class NGamePatch
     {
+        public static Action? Ready;
+        public static Action? Process;
         [HarmonyPostfix]
         public static void PostFix(int what)
         {
@@ -38,8 +40,9 @@ namespace NeuroSdk
                     break;
 
                 case (int)Godot.Node.NotificationInternalProcess:
-                    NeuroSdkSetup.WebsocketInstance?.Loop();
                     STS2NeuroIntegration.NeuroIntegration.Instance?.Processs();
+                    Process?.Invoke(); // Call Process on Action Windows
+                    NeuroSdkSetup.WebsocketInstance?.Loop();
                     break;
                 case (int)1006:
                     NeuroSdkSetup.ActionHandleInstance?.Quit();

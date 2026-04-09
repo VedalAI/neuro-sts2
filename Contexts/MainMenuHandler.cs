@@ -32,6 +32,11 @@ public class MainMenuHandler : IContextHandler
         return result;
     }
 
+    public string GetContext(ContextInfo ctx)
+    {
+        return "You are on the Main Menu of Slay the Spire 2, " +
+                    (SaveManager.Instance.HasRunSave ? "You have a already ongoing Run, you can choose to continue your last adventure or abandon it to start fresh with a new character" : "Start a new Run to select a Character and Start your Adventure! And Conquer the Spire");
+    }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
@@ -196,12 +201,7 @@ public class MainMenuHandler : IContextHandler
                 {
                     Plugin.Log("Navigated to character select via singleplayer submenu");
                     await Task.Delay(100);
-                    StringBuilder starting_character = new();
-                    var first_character = cs.GetNode<Control>("CharSelectButtons/ButtonContainer").GetChild<NCharacterSelectButton>(0);
-                    starting_character.AppendLine($"# Selected {TextHelper.StripBBCode(first_character.Character.Title.GetFormattedText())}");
-                    starting_character.ReprecentStartingCharacter(first_character.Character);
 
-                    NeuroIntegration.SendContext(starting_character.ToString());
                     return ActionResult.Ok("Navigated to character select");
                 }
             }

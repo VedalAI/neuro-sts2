@@ -23,51 +23,18 @@ public class RewardsHandler : IContextHandler
 {
     public ContextType Type => ContextType.Rewards;
 
-    public Dictionary<string, object>? SerializeState(ContextInfo ctx)
-    {
-        var rewardsScreen = ctx.RewardsScreen;
-        if (rewardsScreen == null) return null;
-
-        var buttons = GetEnabledRewardButtons(rewardsScreen);
-        var rewards = buttons.Select((b, i) =>
-        {
-            var reward = b.Reward!;
-            return new Dictionary<string, object>
-            {
-                ["index"] = i,
-                ["type"] = reward switch
-                {
-                    GoldReward => "gold",
-                    CardReward => "card",
-                    PotionReward => "potion",
-                    RelicReward => "relic",
-                    CardRemovalReward => "card_removal",
-                    _ => "unknown"
-                },
-                ["description"] = TextHelper.SafeLocString(() => reward.Description)
-            };
-        }).ToList();
-
-        var overlay = new Dictionary<string, object>
-        {
-            ["type"] = "rewards",
-            ["rewards"] = rewards
-        };
-
-        var proceedButton = UiHelper.FindFirst<NProceedButton>((Node)rewardsScreen);
-        overlay["canProceed"] = proceedButton?.IsEnabled ?? false;
-
-        return overlay;
-    }
-
     public string GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
-        stringBuilder.AppendLine("## You are on a Rewards screen");
 
         var rewardsScreen = ctx.RewardsScreen;
         if (rewardsScreen == null) return stringBuilder.ToString();
         var buttons = GetEnabledRewardButtons(rewardsScreen);
+        if (buttons.Count <= 0)
+        {
+            return stringBuilder.ToString();
+        }
+        stringBuilder.AppendLine("## You are on a Rewards screen");
         stringBuilder.AppendLine("The Following are the available rewards, You can choose as many as you want. The moment you use proceed the rest are discarded and you can't pick them anymore");
         for (int i = 0; i < buttons.Count; i++)
         {
@@ -119,7 +86,6 @@ public class RewardsHandler : IContextHandler
     public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
-        GameStabilityDetector.ResetWasStable();
         return action.Name switch
         {
             "select_reward" => await SelectReward(root, ctx),
@@ -140,6 +106,7 @@ public class RewardsHandler : IContextHandler
             return ActionResult.Error($"Reward index {rewardIndex} out of range (available: {buttons.Count})");
 
         await GodotMainThread.ClickAsync(buttons[rewardIndex]);
+        GameStabilityDetector.ResetWasStable();
         Plugin.Log($"Selected reward {rewardIndex}");
         return ActionResult.Ok("Reward selected");
     }
@@ -154,10 +121,12 @@ public class RewardsHandler : IContextHandler
             {
                 await GodotMainThread.ClickAsync(button);
                 Plugin.Log("Clicked proceed on rewards");
+                GameStabilityDetector.ResetWasStable();
                 return ActionResult.Ok("Proceeded");
             }
         }
 
+        GameStabilityDetector.ResetWasStable();
         return ActionResult.Error("No proceed button found");
     }
 
