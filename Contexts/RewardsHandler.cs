@@ -13,6 +13,9 @@ using STS2NeuroIntegration;
 using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
+using NeuroSdk.Json;
+using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace Sts2Agent.Contexts;
 
@@ -57,6 +60,33 @@ public class RewardsHandler : IContextHandler
         return overlay;
     }
 
+    public string GetContext(ContextInfo ctx)
+    {
+        StringBuilder stringBuilder = new();
+        stringBuilder.AppendLine("## You are on a Rewards screen");
+
+        var rewardsScreen = ctx.RewardsScreen;
+        if (rewardsScreen == null) return stringBuilder.ToString();
+        var buttons = GetEnabledRewardButtons(rewardsScreen);
+        stringBuilder.AppendLine("The Following are the available rewards, You can choose as many as you want. The moment you use proceed the rest are discarded and you can't pick them anymore");
+        for (int i = 0; i < buttons.Count; i++)
+        {
+            NRewardButton? rewardbutton = buttons[i];
+            var reward = rewardbutton.Reward!;
+            var type = reward switch
+            {
+                GoldReward => "Gold",
+                CardReward => "Card",
+                PotionReward => "Potion",
+                RelicReward => "Relic",
+                CardRemovalReward => "Card Removal",
+                _ => "unknown"
+            };
+            stringBuilder.AppendLine($"- [{i}] {type} Reward: {TextHelper.SafeLocString(() => reward.Description)}");
+        }
+        return stringBuilder.ToString();
+    }
+
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
@@ -64,26 +94,32 @@ public class RewardsHandler : IContextHandler
         if (rewardsScreen == null) return commands;
 
         var buttons = GetEnabledRewardButtons(rewardsScreen);
-        for (int i = 0; i < buttons.Count; i++)
+        commands.Add(new("select_reward", "Select a reward", QJS.WrapObject(new Dictionary<string, JsonSchema>()
         {
-            // commands.Add(new Dictionary<string, object>
-            // {
-            //     ["type"] = "select_reward",
-            //     ["rewardIndex"] = i,
-            //     ["reward"] = TextHelper.SafeLocString(() => buttons[i].Reward!.Description)
-            // });
-        }
+            ["rewardIndex"] = new()
+            {
+                Type = JsonSchemaType.Integer,
+                Minimum = 0,
+                Maximum = buttons.Count - 1
+            }
+        })));
 
         var proceedButton = UiHelper.FindFirst<NProceedButton>((Node)rewardsScreen);
-        // if (proceedButton?.IsEnabled == true)
-        //     commands.Add(new Dictionary<string, object> { ["type"] = "proceed" });
+        if (proceedButton?.IsEnabled == true)
+            commands.Add(new("proceed", "Proceed, This skips any unclaimed rewards! be sure to collect them all if they are interesting"));
 
         return commands;
     }
 
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        parsedData = data.Data;
+        return ExecutionResult.Success();
+    }
     public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
+        GameStabilityDetector.ResetWasStable();
         return action.Name switch
         {
             "select_reward" => await SelectReward(root, ctx),
@@ -132,9 +168,5 @@ public class RewardsHandler : IContextHandler
             .ToList();
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
-    {
-        throw new NotImplementedException();
-    }
 
 }

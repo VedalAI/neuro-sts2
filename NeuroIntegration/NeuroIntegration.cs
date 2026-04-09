@@ -95,13 +95,16 @@ public class NeuroIntegration : Node
     }
 
 
-    if (handler.GetCommands(ctx) is List<ConstructedAction> CommandsList)
+    if (handler.GetCommands(ctx) is List<ConstructedAction> CommandsList && CommandsList.Count > 0)
     {
       if (ctx == null)
       {
         Plugin.LogError("Couldn't resolve current Context");
+        GameStabilityDetector.ResetWasStable();
+        GameStabilityDetector.ScheduleStabilityCheck();
+        return;
       }
-      var window = ActionWindow.Create(this).SetContext(ActionExecutor.GetHandlers().First((handler) => handler.Type == ctx.Type).GetContext(ctx)); // TODO: replace this with the proper context from above values.
+      var window = ActionWindow.Create(this).SetContext(handler.GetContext(ctx));
       var new_global_actions = new List<ConstructedAction>();
       foreach (var item in CommandsList)
       {
@@ -122,6 +125,8 @@ public class NeuroIntegration : Node
     else
     {
       Plugin.LogError("Decision Point Reached without actual commands to run!");
+      GameStabilityDetector.ResetWasStable();
+      GameStabilityDetector.ScheduleStabilityCheck();
     }
   }
 

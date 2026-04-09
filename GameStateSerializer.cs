@@ -117,21 +117,21 @@ public static class GameStateSerializer
                 state["available_commands"] = handler.GetCommands(ctx);
 
             // Drain accumulated events
-            var events = EventLog.DrainAll();
-            if (events.Count > 0)
-            {
-                state["events"] = events.Select(e =>
-                {
-                    var dict = new Dictionary<string, object>
-                    {
-                        ["type"] = e.Type,
-                        ["message"] = e.Message
-                    };
-                    if (e.Details != null)
-                        dict["details"] = e.Details;
-                    return dict;
-                }).ToList();
-            }
+            // var events = EventLog.DrainAll();
+            // if (events.Count > 0)
+            // {
+            //     state["events"] = events.Select(e =>
+            //     {
+            //         var dict = new Dictionary<string, object>
+            //         {
+            //             ["type"] = e.Type,
+            //             ["message"] = e.Message
+            //         };
+            //         if (e.Details != null)
+            //             dict["details"] = e.Details;
+            //         return dict;
+            //     }).ToList();
+            // }
 
             return state;
         }

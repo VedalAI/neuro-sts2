@@ -76,7 +76,7 @@ public class CharacterSelectHandler : IContextHandler
             {
                 ["character"] = QJS.Enum(character_names)
             }
-        }, true));
+        }));
 
 
         if (ctx.CharacterSelectScreen != null && GodotObject.IsInstanceValid(ctx.CharacterSelectScreen))
@@ -137,6 +137,7 @@ public class CharacterSelectHandler : IContextHandler
             character_descriptor.AppendLine($"# Selected {name}");
             character_descriptor.ReprecentStartingCharacter(character);
 
+            GameStabilityDetector.ResetWasStable();
             Plugin.Log($"Selected character: {name}");
             NeuroIntegration.SendContext(character_descriptor.ToString());
             return ActionResult.Ok($"Selected character: {name}");
@@ -155,8 +156,6 @@ public class CharacterSelectHandler : IContextHandler
             if (!embarkButton.IsEnabled)
                 return ActionResult.Error("Embark button is not enabled (select a character first)");
 
-            //Unregister select_character action
-            NeuroIntegration.UnregisterAction("select_character");
 
             await GodotMainThread.ClickAsync(embarkButton);
 

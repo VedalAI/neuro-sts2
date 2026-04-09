@@ -122,7 +122,7 @@ public class CardSelectionHandler : IContextHandler
                 MinItems = min_select,
                 MaxItems = max_select,
                 Items = QJS.Enum(cardHolders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
-            }, true));
+            }));
         }
         else
         {
@@ -133,7 +133,7 @@ public class CardSelectionHandler : IContextHandler
                 Properties = {
                 ["card"] = QJS.Enum(cardHolders.Select((x)=> x.CardNode!.Model!.Title).Distinct()),
                 }
-            }, true));
+            }));
 
         }
 
