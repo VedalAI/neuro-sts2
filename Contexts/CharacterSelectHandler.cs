@@ -80,15 +80,11 @@ public class CharacterSelectHandler : IContextHandler
             if (!GodotObject.IsInstanceValid(btn) || btn.IsLocked) continue;
             character_names.Add(GetCharacterName(btn));
         }
-        commands.Add(new ConstructedAction("select_character", "Selects a new Character", new()
+        commands.Add(new ConstructedAction("select_character", "Selects a new Character", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
-            Type = NeuroSdk.Json.JsonSchemaType.Object,
-            Required = ["character"],
-            Properties = new Dictionary<string, NeuroSdk.Json.JsonSchema>
-            {
-                ["character"] = QJS.Enum(character_names)
-            }
-        }));
+            ["character"] = QJS.Enum(character_names)
+        }
+        )));
 
 
         if (ctx.CharacterSelectScreen != null && GodotObject.IsInstanceValid(ctx.CharacterSelectScreen))

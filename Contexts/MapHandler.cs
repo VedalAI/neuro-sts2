@@ -63,15 +63,10 @@ public class MapHandler : IContextHandler
         var commands = new List<ConstructedAction>();
         if (ctx.AvailableMapNodes == null) return commands;
 
-        commands.Add(new("select_map_node", "Select a point to travel to", new()
+        commands.Add(new("select_map_node", "Select a point to travel to", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
-            Type = NeuroSdk.Json.JsonSchemaType.Object,
-            Required = ["coord"],
-            Properties =
-            {
-                ["coord"]= QJS.Enum(ctx.AvailableMapNodes.Select((node)=> $"{node.coord.row},{node.coord.col}"))
-            }
-        }));
+            ["coord"] = QJS.Enum(ctx.AvailableMapNodes.Select((node) => $"{node.coord.row},{node.coord.col}"))
+        })));
 
 
         return commands;

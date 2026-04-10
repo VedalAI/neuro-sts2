@@ -129,14 +129,10 @@ public class CardSelectionHandler : IContextHandler
         }
         else
         {
-            commands.Add(new("select_card", "Select a available card", new()
+            commands.Add(new("select_card", "Select a available card", QJS.WrapObject(new Dictionary<string, JsonSchema>
             {
-                Type = JsonSchemaType.Object,
-                Required = ["card"],
-                Properties = {
-                ["card"] = QJS.Enum(cardHolders.Select((x)=> x.CardNode!.Model!.Title).Distinct()),
-                }
-            }));
+                ["card"] = QJS.Enum(cardHolders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
+            })));
 
         }
 

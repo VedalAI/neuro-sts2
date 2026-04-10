@@ -160,16 +160,10 @@ public class EventContextHandler : IContextHandler
         }
         else
         {
-            commands.Add(new("select_event_option", "Select a option in the Event", new()
+            commands.Add(new("select_event_option", "Select a option in the Event", QJS.WrapObject(new Dictionary<string, JsonSchema>
             {
-                Type = NeuroSdk.Json.JsonSchemaType.Object,
-                Required = ["option"],
-                Properties = new()
-                {
-                    ["option"] = QJS.Enum(evt.CurrentOptions.Where((x) => !x.IsLocked).Select((x) => x.Title.GetUnformatedText()))
-                }
-
-            }));
+                ["option"] = QJS.Enum(evt.CurrentOptions.Where((x) => !x.IsLocked).Select((x) => x.Title.GetUnformatedText()))
+            })));
         }
 
         return commands;
