@@ -73,6 +73,16 @@ public class ShopHandler : IContextHandler
         return commands;
     }
 
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
+
+    public string GetContext(ContextInfo ctx)
+    {
+        throw new NotImplementedException();
+    }
+
     public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
@@ -190,15 +200,5 @@ public class ShopHandler : IContextHandler
         if (entry is MerchantPotionEntry potionEntry)
             return TextHelper.SafeLocString(() => potionEntry.Model.Title);
         return "Remove Card";
-    }
-
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
-    {
-        throw new NotImplementedException();
-    }
-
-    public string GetContext(ContextInfo ctx)
-    {
-        throw new NotImplementedException();
     }
 }

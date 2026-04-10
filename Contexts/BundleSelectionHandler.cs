@@ -15,6 +15,7 @@ using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 using NeuroSdk.Json;
 using System.Text;
+using MegaCrit.Sts2.Core.Models.Cards;
 
 namespace Sts2Agent.Contexts;
 
@@ -105,6 +106,12 @@ public class BundleSelectionHandler : IContextHandler
         return commands;
     }
 
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        //TODO: Proper Validation
+        parsedData = data.Data;
+        return ExecutionResult.Success();
+    }
     public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
@@ -169,8 +176,4 @@ public class BundleSelectionHandler : IContextHandler
         return ExecutionResult.Success("Bundle selected");
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
-    {
-        throw new NotImplementedException();
-    }
 }

@@ -47,6 +47,7 @@ public class TreasureHandler : IContextHandler
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
     {
+        //TODO: Proper Validation
         parsedData = data.Data;
         return ExecutionResult.Success();
     }

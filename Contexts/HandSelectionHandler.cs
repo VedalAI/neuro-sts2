@@ -137,7 +137,9 @@ public class HandSelectionHandler : IContextHandler
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
     {
-        throw new NotImplementedException();
+        //TODO: Proper Validation
+        parsedData = data.Data;
+        return ExecutionResult.Success();
     }
     public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
