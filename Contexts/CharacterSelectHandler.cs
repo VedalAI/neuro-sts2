@@ -22,40 +22,6 @@ public class CharacterSelectHandler : IContextHandler
 
     public ContextType Type => ContextType.CharacterSelect;
 
-    public Dictionary<string, object>? SerializeState(ContextInfo ctx)
-    {
-        if (ctx.CharacterButtons == null) return null;
-
-        var characters = new List<Dictionary<string, object>>();
-        for (int i = 0; i < ctx.CharacterButtons.Count; i++)
-        {
-            var btn = ctx.CharacterButtons[i];
-            if (!GodotObject.IsInstanceValid(btn)) continue;
-            characters.Add(new Dictionary<string, object>
-            {
-                ["index"] = i,
-                ["name"] = GetCharacterName(btn),
-                ["locked"] = btn.IsLocked
-            });
-        }
-
-        var result = new Dictionary<string, object>
-        {
-            ["characters"] = characters
-        };
-
-        // Show which character is currently selected
-        if (ctx.CharacterSelectScreen != null && SelectedButtonField != null)
-        {
-            var selected = SelectedButtonField.GetValue(ctx.CharacterSelectScreen) as NCharacterSelectButton;
-            if (selected != null && GodotObject.IsInstanceValid(selected))
-                result["selected"] = GetCharacterName(selected);
-        }
-
-        return result;
-    }
-
-
     public string GetContext(ContextInfo ctx)
     {
         StringBuilder starting_character = new();

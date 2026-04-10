@@ -23,6 +23,7 @@ public class EventContextHandler : IContextHandler
 {
     public ContextType Type => ContextType.Event;
 
+    //TODO: make this more robust. Context is a bit odd in some events
     public string GetContext(ContextInfo ctx)
     {
         var eventRoom = ctx.EventRoom;

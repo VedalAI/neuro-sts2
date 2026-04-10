@@ -45,6 +45,7 @@ public class MapHandler : IContextHandler
         return result;
     }
 
+    //TODO: Figure out how to best represent the paths. Like giving context where a choice can lead, i.e. shop or rest site
     public string GetContext(ContextInfo ctx)
     {
         StringBuilder mapBuilder = new();

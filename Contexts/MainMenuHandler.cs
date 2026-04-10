@@ -22,16 +22,7 @@ public class MainMenuHandler : IContextHandler
 {
     public ContextType Type => ContextType.MainMenu;
 
-    public Dictionary<string, object>? SerializeState(ContextInfo ctx)
-    {
-        var result = new Dictionary<string, object>
-        {
-            ["screen"] = "main_menu",
-            ["has_saved_run"] = SaveManager.Instance.HasRunSave
-        };
-        return result;
-    }
-
+    //TODO: make this not a single Line
     public string GetContext(ContextInfo ctx)
     {
         return "You are on the Main Menu of Slay the Spire 2, " +
