@@ -76,23 +76,23 @@ public static class ActionExecutor
             var handler = Handlers.FirstOrDefault(h => h.Type == ctx.Type);
             if (handler != null)
             {
-                var json_elements = JsonDocument.Parse(JsonSerializer.Serialize(ParsedData, STS2NeuroIntegration.NeuroIntegration.JsonOptions));
-                handler.TryExecute(action, json_elements.RootElement, ctx)?.ContinueWith(async (something) =>
+                var json_elements = JsonDocument.Parse(JsonSerializer.Serialize(ParsedData, NeuroIntegration.JsonOptions));
+                _ = (GodotMainThread.RunAsync(async () =>
                 {
-                    var task = await something;
-                    if (task != null && task.HasValue && task.Value is ActionResult.Result result)
+                    var result = await handler?.TryExecute(action, json_elements?.RootElement ?? new(), ctx) ?? ExecutionResult.ModFailure("handler didn't return awaitable");
+                    if (result.Successful)
                     {
-                        if (result.ok)
-                        {
-                            Plugin.LogDebug("Action Successful with message: " + result.message);
-                        }
-                        else
-                        {
-                            Plugin.LogError($"[CRITICAL] Action has Errored during Execution with Message: {result.message}, The Validation or Execution are wrong for handler of action: {action.Name}");
-                        }
-                        GameStabilityDetector.ScheduleStabilityCheck();
+                        Plugin.LogDebug("Action Successful with message: " + result.Message);
                     }
-                });
+                    else
+                    {
+                        Plugin.LogError($"[CRITICAL] Action has Errored during Execution with Message: {result.Message}, The Validation or Execution are wrong for handler of action: {action.Name}");
+                    }
+                    GameStabilityDetector.ScheduleStabilityCheck();
+                })
+                ?.ContinueWith(async (something) =>
+                {
+                }));
                 return;
             }
 

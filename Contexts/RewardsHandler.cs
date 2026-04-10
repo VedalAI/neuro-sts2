@@ -83,7 +83,7 @@ public class RewardsHandler : IContextHandler
         parsedData = data.Data;
         return ExecutionResult.Success();
     }
-    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
         return action.Name switch
@@ -94,24 +94,24 @@ public class RewardsHandler : IContextHandler
         };
     }
 
-    private async Task<ActionResult.Result> SelectReward(JsonElement root, ContextInfo ctx)
+    private async Task<ExecutionResult> SelectReward(JsonElement root, ContextInfo ctx)
     {
         var rewardIndex = root.GetProperty("rewardIndex").GetInt32();
         var rewardsScreen = ctx.RewardsScreen;
         if (rewardsScreen == null)
-            return ActionResult.Error("No rewards screen");
+            return ExecutionResult.Failure("No rewards screen");
 
         var buttons = GetEnabledRewardButtons(rewardsScreen);
         if (rewardIndex < 0 || rewardIndex >= buttons.Count)
-            return ActionResult.Error($"Reward index {rewardIndex} out of range (available: {buttons.Count})");
+            return ExecutionResult.Failure($"Reward index {rewardIndex} out of range (available: {buttons.Count})");
 
         await GodotMainThread.ClickAsync(buttons[rewardIndex]);
         GameStabilityDetector.ResetWasStable();
         Plugin.Log($"Selected reward {rewardIndex}");
-        return ActionResult.Ok("Reward selected");
+        return ExecutionResult.Success("Reward selected");
     }
 
-    private async Task<ActionResult.Result> Proceed(ContextInfo ctx)
+    private async Task<ExecutionResult> Proceed(ContextInfo ctx)
     {
         // Try proceed button on rewards overlay first
         if (ctx.RewardsScreen != null)
@@ -122,12 +122,12 @@ public class RewardsHandler : IContextHandler
                 await GodotMainThread.ClickAsync(button);
                 Plugin.Log("Clicked proceed on rewards");
                 GameStabilityDetector.ResetWasStable();
-                return ActionResult.Ok("Proceeded");
+                return ExecutionResult.Success("Proceeded");
             }
         }
 
         GameStabilityDetector.ResetWasStable();
-        return ActionResult.Error("No proceed button found");
+        return ExecutionResult.Failure("No proceed button found");
     }
 
     private static List<NRewardButton> GetEnabledRewardButtons(NRewardsScreen screen)

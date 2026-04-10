@@ -73,7 +73,7 @@ public class ShopHandler : IContextHandler
         return commands;
     }
 
-    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
         return action.Name switch
@@ -85,62 +85,62 @@ public class ShopHandler : IContextHandler
         };
     }
 
-    private async Task<ActionResult.Result> ShopOpen()
+    private async Task<ExecutionResult> ShopOpen()
     {
         var nRoom = NMerchantRoom.Instance;
         if (nRoom == null)
-            return ActionResult.Error("Not in shop");
+            return ExecutionResult.Failure("Not in shop");
         if (nRoom.Inventory?.IsOpen == true)
-            return ActionResult.Error("Shop already open");
+            return ExecutionResult.Failure("Shop already open");
 
         var merchantButton = nRoom.MerchantButton;
         if (merchantButton == null)
-            return ActionResult.Error("Merchant button not found");
+            return ExecutionResult.Failure("Merchant button not found");
 
         await GodotMainThread.ClickAsync(merchantButton);
         Plugin.Log("Opened shop inventory");
-        return ActionResult.Ok("Shop opened");
+        return ExecutionResult.Success("Shop opened");
     }
 
-    private async Task<ActionResult.Result> ShopBuy(JsonElement root, ContextInfo ctx)
+    private async Task<ExecutionResult> ShopBuy(JsonElement root, ContextInfo ctx)
     {
         var itemIndex = root.GetProperty("itemIndex").GetInt32();
         var items = ctx.ShopItems;
         var inv = ctx.ShopInventory;
 
         if (items == null || inv == null)
-            return ActionResult.Error("No shop inventory");
+            return ExecutionResult.Failure("No shop inventory");
 
         if (itemIndex < 0 || itemIndex >= items.Count)
-            return ActionResult.Error($"Shop item index {itemIndex} out of range (available: {items.Count})");
+            return ExecutionResult.Failure($"Shop item index {itemIndex} out of range (available: {items.Count})");
 
         var entry = items[itemIndex];
         if (!entry.EnoughGold)
-            return ActionResult.Error("Not enough gold");
+            return ExecutionResult.Failure("Not enough gold");
 
         await GodotMainThread.RunAsync(() => entry.OnTryPurchaseWrapper(inv));
         await Task.Delay(300);
 
         Plugin.Log($"Bought shop item {itemIndex}");
-        return ActionResult.Ok("Item purchased");
+        return ExecutionResult.Success("Item purchased");
     }
 
-    private async Task<ActionResult.Result> ShopLeave()
+    private async Task<ExecutionResult> ShopLeave()
     {
         // Shop leave: find proceed button
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
-            return ActionResult.Error("Cannot access scene tree");
+            return ExecutionResult.Failure("Cannot access scene tree");
 
         var button = UiHelper.FindFirst<NProceedButton>(sceneRoot);
         if (button != null)
         {
             await GodotMainThread.ClickAsync(button);
             Plugin.Log("Clicked proceed (shop leave)");
-            return ActionResult.Ok("Proceeded");
+            return ExecutionResult.Success("Proceeded");
         }
 
-        return ActionResult.Error("No proceed button found");
+        return ExecutionResult.Failure("No proceed button found");
     }
 
     private static Dictionary<string, object> SerializeShopEntry(MerchantEntry entry, int index)

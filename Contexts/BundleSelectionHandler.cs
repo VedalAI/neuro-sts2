@@ -13,6 +13,8 @@ using STS2NeuroIntegration;
 using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
+using NeuroSdk.Json;
+using System.Text;
 
 namespace Sts2Agent.Contexts;
 
@@ -63,7 +65,26 @@ public class BundleSelectionHandler : IContextHandler
 
     public string GetContext(ContextInfo ctx)
     {
-        throw new NotImplementedException();
+        StringBuilder stringBuilder = new();
+        var bundles = ctx.Bundles;
+        if (bundles == null) return stringBuilder.ToString();
+        if (bundles.Count == 0) return stringBuilder.ToString();
+        stringBuilder.AppendLine($"You have to select a bundle of cards");
+        stringBuilder.AppendLine($"You have {bundles.Count} bundles available to choose from:");
+
+        for (int i = 0; i < bundles.Count; i++)
+        {
+            NCardBundle? bundle = bundles[i];
+            if (bundle.Bundle == null) continue;
+
+            stringBuilder.AppendLine($"[{i}] bundle: (");
+            foreach (var card in bundle.Bundle)
+            {
+                stringBuilder.Append($", {card.Title} - {TextHelper.GetCardDescription(card)}");
+            }
+            stringBuilder.AppendLine(")");
+        }
+        return stringBuilder.ToString();
     }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
@@ -71,24 +92,20 @@ public class BundleSelectionHandler : IContextHandler
         var bundles = ctx.Bundles;
         if (bundles == null) return commands;
 
-        for (int i = 0; i < bundles.Count; i++)
+        commands.Add(new("select_bundle", "Select a bundle of cards", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
-            var bundle = bundles[i];
-            if (bundle.Bundle == null) continue;
-
-            var cardNames = string.Join(", ", bundle.Bundle.Select(c => c.Title));
-            // commands.Add(new Dictionary<string, object>
-            // {
-            //     ["type"] = "select_bundle",
-            //     ["bundleIndex"] = i,
-            //     ["cards"] = cardNames
-            // });
-        }
+            ["bundleIndex"] = new()
+            {
+                Type = JsonSchemaType.Integer,
+                Minimum = 0,
+                Maximum = bundles.Count - 1
+            }
+        })));
 
         return commands;
     }
 
-    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
         return action.Name switch
@@ -98,13 +115,13 @@ public class BundleSelectionHandler : IContextHandler
         };
     }
 
-    private async Task<ActionResult.Result> SelectBundle(JsonElement root, ContextInfo ctx)
+    private async Task<ExecutionResult> SelectBundle(JsonElement root, ContextInfo ctx)
     {
         var bundleIndex = root.GetProperty("bundleIndex").GetInt32();
         var bundles = ctx.Bundles;
 
         if (bundles == null || bundleIndex < 0 || bundleIndex >= bundles.Count)
-            return ActionResult.Error($"Bundle index {bundleIndex} out of range (available: {bundles?.Count ?? 0})");
+            return ExecutionResult.Failure($"Bundle index {bundleIndex} out of range (available: {bundles?.Count ?? 0})");
 
         var bundle = bundles[bundleIndex];
         var overlayNode = ctx.OverlayNode;
@@ -131,7 +148,7 @@ public class BundleSelectionHandler : IContextHandler
         }
 
         if (confirmButton == null)
-            return ActionResult.Error("Confirm button not found or not enabled after selecting bundle");
+            return ExecutionResult.Failure("Confirm button not found or not enabled after selecting bundle");
 
         await GodotMainThread.ClickAsync(confirmButton);
         Plugin.LogDebug("BundleSelection: clicked confirm button");
@@ -144,12 +161,12 @@ public class BundleSelectionHandler : IContextHandler
                 || NOverlayStack.Instance?.Peek() != overlayScreen)
             {
                 Plugin.Log($"Selected bundle {bundleIndex}");
-                return ActionResult.Ok("Bundle selected");
+                return ExecutionResult.Success("Bundle selected");
             }
         }
 
         Plugin.Log($"Selected bundle {bundleIndex} (overlay may still be closing)");
-        return ActionResult.Ok("Bundle selected");
+        return ExecutionResult.Success("Bundle selected");
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)

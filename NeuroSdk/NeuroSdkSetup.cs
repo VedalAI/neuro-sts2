@@ -26,7 +26,7 @@ namespace NeuroSdk
 
             switch (what)
             {
-                case (int)Godot.Node.NotificationReady:
+                case (int)Node.NotificationReady:
                     var tree = (Engine.GetMainLoop() as SceneTree)?.Root.GetNode("Game");
                     if (tree == null)
                     {
@@ -39,14 +39,14 @@ namespace NeuroSdk
                     Plugin.LogDebug("NeuroSDKReady");
                     break;
 
-                case (int)Godot.Node.NotificationInternalProcess:
-                    STS2NeuroIntegration.NeuroIntegration.Instance?.Processs();
+                case (int)Node.NotificationInternalProcess:
+                    NeuroIntegration.Instance?.Processs();
                     Process?.Invoke(); // Call Process on Action Windows
                     NeuroSdkSetup.WebsocketInstance?.Loop();
                     break;
                 case (int)1006:
                     NeuroSdkSetup.ActionHandleInstance?.Quit();
-                    STS2NeuroIntegration.NeuroIntegration.Instance?.Quit();
+                    NeuroIntegration.Instance?.Quit();
                     break;
                 default:
                     break;
@@ -96,9 +96,9 @@ namespace NeuroSdk
             WebsocketInstance.Startup();
 
 
-            var integration = new STS2NeuroIntegration.NeuroIntegration();
+            var integration = new NeuroIntegration();
             neuroSDKNode.AddChild(integration);
-            STS2NeuroIntegration.NeuroIntegration.Setup(integration);
+            NeuroIntegration.Setup(integration);
 
             integration.Ready();
 

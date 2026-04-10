@@ -207,7 +207,7 @@ namespace NeuroSdk.Websocket
 
                 Plugin.Log("Received ws message " + msgData);
 
-                JsonObject message = (JsonObject)JsonObject.Parse(msgData);
+                JsonObject message = (JsonObject)JsonNode.Parse(msgData);
                 string? command = message["command"]?.GetValue<string>();
                 MessageJData data = new(message["data"]);
 

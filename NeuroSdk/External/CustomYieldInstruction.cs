@@ -17,7 +17,7 @@ public abstract class CustomYieldInstruction : IEnumerator
     // This allows "await new WaitForUpdate()" to work directly
     public TaskAwaiter<bool> GetAwaiter()
     {
-        var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<bool>();
 
         // Use Godot's MainLoop to check the condition every frame
         MainThreadUtil.Run(() =>

@@ -22,11 +22,15 @@ public class MainMenuHandler : IContextHandler
 {
     public ContextType Type => ContextType.MainMenu;
 
-    //TODO: make this not a single Line
     public string GetContext(ContextInfo ctx)
     {
-        return "You are on the Main Menu of Slay the Spire 2, " +
-                    (SaveManager.Instance.HasRunSave ? "You have a already ongoing Run, you can choose to continue your last adventure or abandon it to start fresh with a new character" : "Start a new Run to select a Character and Start your Adventure! And Conquer the Spire");
+        StringBuilder stringBuilder = new();
+        stringBuilder.Append("You are on the Main Menu of Slay the Spire 2, ");
+        if (SaveManager.Instance.HasRunSave)
+            stringBuilder.AppendLine("You have a already ongoing Run, you can choose to continue your last adventure or abandon it to start fresh with a new character");
+        else
+            stringBuilder.AppendLine("Start a new Run to select a Character and Start your Adventure! And Conquer the Spire");
+        return stringBuilder.ToString();
     }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
@@ -82,28 +86,26 @@ public class MainMenuHandler : IContextHandler
                     return ExecutionResult.Success();
                 else
                     return ExecutionResult.ModFailure("can't start run. A run is already active");
-
-
         }
 
         return ExecutionResult.Failure("Unknown Action called in Main Menu");
     }
-    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement ParsedData, ContextInfo ctx)
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement ParsedData, ContextInfo ctx)
     {
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
-            return ActionResult.Error("Cannot access scene tree");
+            return ExecutionResult.Failure("Cannot access scene tree");
 
         var mainMenu = UiHelper.FindFirst<NMainMenu>(sceneRoot);
         if (mainMenu == null)
-            return ActionResult.Error("Main menu not found");
+            return ExecutionResult.Failure("Main menu not found");
 
         if (action.Name == "continue_run")
         {
             var continueBtn = await GodotMainThread.RunAsync(() =>
                 mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton"));
             if (continueBtn == null || !continueBtn.IsEnabled)
-                return ActionResult.Error("Continue button not available");
+                return ExecutionResult.Failure("Continue button not available");
 
             await GodotMainThread.ClickAsync(continueBtn);
 
@@ -116,7 +118,7 @@ public class MainMenuHandler : IContextHandler
             }
 
             Plugin.Log("Continued saved run");
-            return ActionResult.Ok("Continued saved run");
+            return ExecutionResult.Success("Continued saved run");
         }
 
         if (action.Name == "abandon_run")
@@ -124,7 +126,7 @@ public class MainMenuHandler : IContextHandler
             var abandonBtn = await GodotMainThread.RunAsync(() =>
                 mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/AbandonRunButton"));
             if (abandonBtn == null || !abandonBtn.IsEnabled)
-                return ActionResult.Error("Abandon run button not available");
+                return ExecutionResult.Failure("Abandon run button not available");
 
             await GodotMainThread.ClickAsync(abandonBtn);
 
@@ -144,7 +146,7 @@ public class MainMenuHandler : IContextHandler
 
             Plugin.Log("Abandoned saved run");
             GameStabilityDetector.ResetWasStable();
-            return ActionResult.Ok("Abandoned saved run");
+            return ExecutionResult.Success("Abandoned saved run");
         }
 
         if (action.Name == "start_run")
@@ -153,9 +155,9 @@ public class MainMenuHandler : IContextHandler
             var spButton = await GodotMainThread.RunAsync(() =>
                 mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton"));
             if (spButton == null)
-                return ActionResult.Error("Singleplayer button not found");
+                return ExecutionResult.Failure("Singleplayer button not found");
             if (!spButton.IsEnabled)
-                return ActionResult.Error("Singleplayer button is not enabled");
+                return ExecutionResult.Failure("Singleplayer button is not enabled");
 
             await GodotMainThread.ClickAsync(spButton);
             await Task.Delay(500);
@@ -166,19 +168,19 @@ public class MainMenuHandler : IContextHandler
             if (charScreen != null && charScreen.Visible)
             {
                 Plugin.Log("Navigated directly to character select");
-                return ActionResult.Ok("Navigated to character select");
+                return ExecutionResult.Success("Navigated to character select");
             }
 
             // Click the Standard button on the singleplayer submenu
             var spSubmenu = await GodotMainThread.RunAsync(() =>
                 UiHelper.FindFirst<NSingleplayerSubmenu>(sceneRoot));
             if (spSubmenu == null || !spSubmenu.Visible)
-                return ActionResult.Error("Singleplayer submenu not found");
+                return ExecutionResult.Failure("Singleplayer submenu not found");
 
             var stdButton = await GodotMainThread.RunAsync(() =>
                 spSubmenu.GetNode<NClickableControl>("StandardButton"));
             if (stdButton == null)
-                return ActionResult.Error("Standard button not found");
+                return ExecutionResult.Failure("Standard button not found");
 
             await GodotMainThread.ClickAsync(stdButton);
 
@@ -193,11 +195,11 @@ public class MainMenuHandler : IContextHandler
                     Plugin.Log("Navigated to character select via singleplayer submenu");
                     await Task.Delay(100);
 
-                    return ActionResult.Ok("Navigated to character select");
+                    return ExecutionResult.Success("Navigated to character select");
                 }
             }
 
-            return ActionResult.Error("Timed out waiting for character select screen");
+            return ExecutionResult.Failure("Timed out waiting for character select screen");
         }
 
         return null;

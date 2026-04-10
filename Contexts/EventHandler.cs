@@ -217,7 +217,7 @@ public class EventContextHandler : IContextHandler
 
         return ExecutionResult.Success();
     }
-    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
         return action.Name switch
@@ -228,13 +228,13 @@ public class EventContextHandler : IContextHandler
         };
     }
 
-    private async Task<ActionResult.Result> SelectEventOption(JsonElement root, ContextInfo ctx)
+    private async Task<ExecutionResult> SelectEventOption(JsonElement root, ContextInfo ctx)
     {
         var optionName = root.GetProperty("option").GetString();
 
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
-            return ActionResult.Error("Cannot access scene tree");
+            return ExecutionResult.Failure("Cannot access scene tree");
 
         var allButtons = UiHelper.FindAll<NEventOptionButton>(sceneRoot);
 
@@ -245,21 +245,21 @@ public class EventContextHandler : IContextHandler
         if (button == null || button.Option.IsLocked)
         {
             Plugin.LogDebug($"Event button lookup: requested={optionName}, found={allButtons.Count} buttons");
-            return ActionResult.Error($"Event option index {optionName} not found or locked");
+            return ExecutionResult.Failure($"Event option index {optionName} not found or locked");
         }
 
         GameStabilityDetector.ResetWasStable();
 
         await GodotMainThread.ClickAsync(button);
         Plugin.Log($"Selected event option {optionName}");
-        return ActionResult.Ok("Event option selected");
+        return ExecutionResult.Success("Event option selected");
     }
 
-    private async Task<ActionResult.Result> Proceed()
+    private async Task<ExecutionResult> Proceed()
     {
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
-            return ActionResult.Error("Cannot access scene tree");
+            return ExecutionResult.Failure("Cannot access scene tree");
 
         // Try proceed button
         var proceedButton = UiHelper.FindFirst<NProceedButton>(sceneRoot);
@@ -267,7 +267,7 @@ public class EventContextHandler : IContextHandler
         {
             await GodotMainThread.ClickAsync(proceedButton);
             Plugin.Log("Clicked proceed");
-            return ActionResult.Ok("Proceeded");
+            return ExecutionResult.Success("Proceeded");
         }
 
         // Finished events use NEventOptionButton with IsProceed=true
@@ -277,10 +277,10 @@ public class EventContextHandler : IContextHandler
         {
             await GodotMainThread.ClickAsync(eventProceed);
             Plugin.Log("Clicked event proceed");
-            return ActionResult.Ok("Proceeded");
+            return ExecutionResult.Success("Proceeded");
         }
 
-        return ActionResult.Error("No proceed button found");
+        return ExecutionResult.Failure("No proceed button found");
     }
 
     /// <summary>

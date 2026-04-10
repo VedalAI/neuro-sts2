@@ -16,5 +16,5 @@ public interface IContextHandler
     List<ConstructedAction> GetCommands(ContextInfo ctx);
 
     ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx);
-    Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement ParsedData, ContextInfo ctx);
+    Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement ParsedData, ContextInfo ctx);
 }

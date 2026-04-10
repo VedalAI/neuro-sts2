@@ -12,6 +12,7 @@ using STS2NeuroIntegration;
 using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
+using System.Text;
 
 namespace Sts2Agent.Contexts;
 
@@ -19,24 +20,12 @@ public class RestSiteHandler : IContextHandler
 {
     public ContextType Type => ContextType.RestSite;
 
-    public Dictionary<string, object>? SerializeState(ContextInfo ctx)
+    public string GetContext(ContextInfo ctx)
     {
-        var restRoom = ctx.RestSiteRoom;
-        if (restRoom == null) return null;
-
-        return new Dictionary<string, object>
-        {
-            ["options"] = restRoom.Options.Select((opt, i) => new Dictionary<string, object>
-            {
-                ["index"] = i,
-                ["id"] = opt.OptionId,
-                ["name"] = TextHelper.SafeLocString(() => opt.Title),
-                ["description"] = TextHelper.SafeLocString(() => opt.Description),
-                ["enabled"] = opt.IsEnabled
-            }).ToList()
-        };
+        StringBuilder stringBuilder = new();
+        stringBuilder.AppendLine("You are at a Rest Site");
+        return stringBuilder.ToString();
     }
-
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
@@ -47,40 +36,41 @@ public class RestSiteHandler : IContextHandler
         {
             if (opt.IsEnabled)
             {
-                // commands.Add(new Dictionary<string, object>
-                // {
-                //     ["type"] = "rest_option",
-                //     ["option"] = opt.OptionId,
-                //     ["name"] = TextHelper.SafeLocString(() => opt.Title)
-                // });
+                commands.Add(new($"rest_option_{opt.OptionId.ToLowerInvariant()}", $" {TextHelper.SafeLocString(() => opt.Title)} - {TextHelper.SafeLocString(() => opt.Description)}"));
             }
         }
 
         var nRestSiteRoom = FindNRestSiteRoom();
-        // if (nRestSiteRoom?.ProceedButton?.IsEnabled == true)
-        //     commands.Add(new Dictionary<string, object> { ["type"] = "proceed" });
+        if (nRestSiteRoom?.ProceedButton?.IsEnabled == true)
+            commands.Add(new("proceed", "Proceed out of the rest site, The Other Options will be ignored"));
 
         return commands;
     }
 
-    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        parsedData = data.Data;
+        return ExecutionResult.Success();
+    }
+
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
         if (action.Name == "proceed") return await Proceed();
-        if (action.Name != "rest_option") return null;
+        if (action.Name.StartsWith("rest_option_")) return null;
 
-        var option = root.GetProperty("option").GetString();
+        var option = action.Name.Replace("rest_option_", "");
 
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
-            return ActionResult.Error("Cannot access scene tree");
+            return ExecutionResult.Failure("Cannot access scene tree");
 
         var buttons = UiHelper.FindAll<NRestSiteButton>(sceneRoot)
             .Where(b => b.Option.IsEnabled)
             .ToList();
 
         if (buttons.Count == 0)
-            return ActionResult.Error("No rest site options available");
+            return ExecutionResult.Failure("No rest site options available");
 
         var match = buttons.FirstOrDefault(b =>
             b.Option.OptionId.Equals(option, StringComparison.OrdinalIgnoreCase));
@@ -90,7 +80,7 @@ public class RestSiteHandler : IContextHandler
             if (int.TryParse(option, out var idx) && idx >= 0 && idx < buttons.Count)
                 match = buttons[idx];
             else
-                return ActionResult.Error($"Rest option '{option}' not found. Available: {string.Join(", ", buttons.Select(b => b.Option.OptionId))}");
+                return ExecutionResult.Failure($"Rest option '{option}' not found. Available: {string.Join(", ", buttons.Select(b => b.Option.OptionId))}");
         }
 
         await GodotMainThread.ClickAsync(match);
@@ -115,18 +105,18 @@ public class RestSiteHandler : IContextHandler
             }
         }
 
-        return ActionResult.Ok("Rest option selected");
+        return ExecutionResult.Success("Rest option selected");
     }
 
-    private async Task<ActionResult.Result> Proceed()
+    private async Task<ExecutionResult> Proceed()
     {
         var nRestSiteRoom = FindNRestSiteRoom();
         if (nRestSiteRoom?.ProceedButton?.IsEnabled != true)
-            return ActionResult.Error("Proceed button not available");
+            return ExecutionResult.Failure("Proceed button not available");
 
         await GodotMainThread.ClickAsync(nRestSiteRoom.ProceedButton);
         Plugin.Log("Clicked proceed (rest site)");
-        return ActionResult.Ok("Proceeded");
+        return ExecutionResult.Success("Proceeded");
     }
 
     private static NRestSiteRoom? FindNRestSiteRoom()
@@ -135,13 +125,4 @@ public class RestSiteHandler : IContextHandler
         return sceneRoot == null ? null : UiHelper.FindFirst<NRestSiteRoom>(sceneRoot);
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
-    {
-        throw new NotImplementedException();
-    }
-
-    public string GetContext(ContextInfo ctx)
-    {
-        throw new NotImplementedException();
-    }
 }

@@ -116,12 +116,13 @@ public class HandSelectionHandler : IContextHandler
         }
         commands.Add(new("select_multiple_cards", min_select != max_select ? $"Select {min_select} up to {max_select} cards" : $"Select {max_select} cards", QJS.WrapObject(new Dictionary<string, JsonSchema>()
         {
-            ["cards"] = {
-                    Type = JsonSchemaType.Array,
-                    MinItems = min_select,
-                    MaxItems = max_select,
-                    Items = QJS.Enum(holders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
-                }
+            ["cards"] = new()
+            {
+                Type = JsonSchemaType.Array,
+                MinItems = min_select,
+                MaxItems = max_select,
+                Items = QJS.Enum(holders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
+            }
         })));
 
 
@@ -138,7 +139,7 @@ public class HandSelectionHandler : IContextHandler
     {
         throw new NotImplementedException();
     }
-    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
         return action.Name switch
@@ -149,17 +150,17 @@ public class HandSelectionHandler : IContextHandler
         };
     }
 
-    private async Task<ActionResult.Result> ChooseHandCard(JsonElement root, ContextInfo ctx)
+    private async Task<ExecutionResult> ChooseHandCard(JsonElement root, ContextInfo ctx)
     {
         var hand = ctx.Hand;
         if (hand == null || !hand.IsInCardSelection)
-            return ActionResult.Error("Hand is not in card selection mode");
+            return ExecutionResult.Failure("Hand is not in card selection mode");
 
         var cardIndex = root.GetProperty("cardIndex").GetInt32();
         var holders = GetVisibleHolders(hand);
 
         if (cardIndex < 0 || cardIndex >= holders.Count)
-            return ActionResult.Error($"Card index {cardIndex} out of range (available: {holders.Count})");
+            return ExecutionResult.Failure($"Card index {cardIndex} out of range (available: {holders.Count})");
 
         var holder = holders[cardIndex];
 
@@ -170,28 +171,28 @@ public class HandSelectionHandler : IContextHandler
         });
 
         Plugin.Log($"Chose hand card {cardIndex}");
-        return ActionResult.Ok("Hand card selected");
+        return ExecutionResult.Success("Hand card selected");
     }
 
-    private async Task<ActionResult.Result> ConfirmSelection(ContextInfo ctx)
+    private async Task<ExecutionResult> ConfirmSelection(ContextInfo ctx)
     {
         var hand = ctx.Hand;
         if (hand == null || !hand.IsInCardSelection)
-            return ActionResult.Error("No active selection to confirm");
+            return ExecutionResult.Failure("No active selection to confirm");
 
         if (ReflectionCache.HandConfirmButton == null)
-            return ActionResult.Error("Cannot access confirm button");
+            return ExecutionResult.Failure("Cannot access confirm button");
 
         var confirmButton = ReflectionCache.HandConfirmButton.GetValue(hand) as NConfirmButton;
         if (confirmButton == null || !confirmButton.IsEnabled)
-            return ActionResult.Error("Confirm button is not enabled (need to select more cards?)");
+            return ExecutionResult.Failure("Confirm button is not enabled (need to select more cards?)");
 
         await GodotMainThread.ClickAsync(confirmButton);
         Plugin.LogDebug("ConfirmSelection: clicked hand select confirm button");
-        return ActionResult.Ok("Selection confirmed");
+        return ExecutionResult.Success("Selection confirmed");
     }
 
-    private static List<NHandCardHolder> GetVisibleHolders(MegaCrit.Sts2.Core.Nodes.Combat.NPlayerHand hand)
+    private static List<NHandCardHolder> GetVisibleHolders(NPlayerHand hand)
     {
         return hand.CardHolderContainer.GetChildren()
             .OfType<NHandCardHolder>()

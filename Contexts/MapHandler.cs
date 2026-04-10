@@ -21,30 +21,6 @@ public class MapHandler : IContextHandler
 {
     public ContextType Type => ContextType.Map;
 
-    public Dictionary<string, object>? SerializeState(ContextInfo ctx)
-    {
-        var runState = ctx.RunState;
-        var result = new Dictionary<string, object>
-        {
-            ["act"] = runState.CurrentActIndex + 1
-        };
-
-        var coord = runState.CurrentMapCoord;
-        if (coord.HasValue)
-            result["currentCoord"] = new { row = coord.Value.row, col = coord.Value.col };
-
-        if (ctx.AvailableMapNodes != null)
-        {
-            result["availableNodes"] = ctx.AvailableMapNodes.Select(p => new Dictionary<string, object>
-            {
-                ["coord"] = new { row = p.coord.row, col = p.coord.col },
-                ["type"] = GetMapPointName(p.PointType)
-            }).ToList();
-        }
-
-        return result;
-    }
-
     //TODO: Figure out how to best represent the paths. Like giving context where a choice can lead, i.e. shop or rest site
     public string GetContext(ContextInfo ctx)
     {
@@ -102,7 +78,7 @@ public class MapHandler : IContextHandler
         }
         return ExecutionResult.Success();
     }
-    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
         if (action.Name != "select_map_node") return null;
@@ -114,18 +90,18 @@ public class MapHandler : IContextHandler
         var target = nodes.Find((x) => x.coord.row == int.Parse(coord[0]) && x.coord.col == int.Parse(coord[1]));
         if (target == null)
         {
-            return ActionResult.Error("Couldn't find specified node");
+            return ExecutionResult.Failure("Couldn't find specified node");
         }
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
-            return ActionResult.Error("Cannot access scene tree");
+            return ExecutionResult.Failure("Cannot access scene tree");
 
         var mapPointNodes = UiHelper.FindAll<NMapPoint>(sceneRoot);
         var targetNode = mapPointNodes.FirstOrDefault(mp =>
             mp.Point.coord.row == target.coord.row && mp.Point.coord.col == target.coord.col);
 
         if (targetNode == null)
-            return ActionResult.Error($"Map node UI element not found for ({target.coord.row}, {target.coord.col})");
+            return ExecutionResult.Failure($"Map node UI element not found for ({target.coord.row}, {target.coord.col})");
 
         await GodotMainThread.ClickAsync(targetNode);
 
@@ -139,7 +115,7 @@ public class MapHandler : IContextHandler
         }
 
         Plugin.Log($"Selected map node {index} ({target.coord.row}, {target.coord.col})");
-        return ActionResult.Ok("Map node selected");
+        return ExecutionResult.Success("Map node selected");
     }
 
     private static string GetMapPointName(MapPointType pointType)

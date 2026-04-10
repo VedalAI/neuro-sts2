@@ -100,7 +100,7 @@ namespace NativeWebSocket
         public static WebSocketCloseCode ParseCloseCodeEnum(int closeCode)
         {
 
-            if (WebSocketCloseCode.IsDefined(typeof(WebSocketCloseCode), closeCode))
+            if (Enum.IsDefined(typeof(WebSocketCloseCode), closeCode))
             {
                 return (WebSocketCloseCode)closeCode;
             }

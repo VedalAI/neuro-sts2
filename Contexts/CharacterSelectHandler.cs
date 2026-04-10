@@ -27,7 +27,7 @@ public class CharacterSelectHandler : IContextHandler
         StringBuilder starting_character = new();
         var first_character = ctx.CharacterButtons!.FirstOrDefault(c => c.IsSelected);
         first_character ??= ctx.CharacterButtons!.First();
-        starting_character.AppendLine($"# Selected {TextHelper.StripBBCode(first_character.Character.Title.GetFormattedText())}");
+        starting_character.AppendLine($"# Currently Selected Character is: {TextHelper.StripBBCode(first_character.Character.Title.GetFormattedText())}");
         starting_character.RepresentStartingCharacter(first_character.Character);
 
         return starting_character.ToString();
@@ -46,7 +46,7 @@ public class CharacterSelectHandler : IContextHandler
             if (!GodotObject.IsInstanceValid(btn) || btn.IsLocked) continue;
             character_names.Add(GetCharacterName(btn));
         }
-        commands.Add(new ConstructedAction("select_character", "Selects a new Character", QJS.WrapObject(new Dictionary<string, JsonSchema>
+        commands.Add(new ConstructedAction("select_character", "Selects a different Character, Use this to select a different Character at the start of your run", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
             ["character"] = QJS.Enum(character_names)
         }
@@ -55,7 +55,7 @@ public class CharacterSelectHandler : IContextHandler
 
         if (ctx.CharacterSelectScreen != null && GodotObject.IsInstanceValid(ctx.CharacterSelectScreen))
         {
-            if (ctx.CharacterSelectScreen.GetNode<Godot.Control>("ConfirmButton") is MegaCrit.Sts2.Core.Nodes.CommonUi.NConfirmButton embarkButton
+            if (ctx.CharacterSelectScreen.GetNode<Control>("ConfirmButton") is MegaCrit.Sts2.Core.Nodes.CommonUi.NConfirmButton embarkButton
                 && embarkButton.IsEnabled)
                 commands.Add(new ConstructedAction("embark", "Start a new Run with the current selected Character"));
         }
@@ -84,7 +84,7 @@ public class CharacterSelectHandler : IContextHandler
 
             if (ctx.CharacterSelectScreen != null && GodotObject.IsInstanceValid(ctx.CharacterSelectScreen))
             {
-                if (ctx.CharacterSelectScreen.GetNode<Godot.Control>("ConfirmButton") is MegaCrit.Sts2.Core.Nodes.CommonUi.NConfirmButton embarkButton
+                if (ctx.CharacterSelectScreen.GetNode<Control>("ConfirmButton") is MegaCrit.Sts2.Core.Nodes.CommonUi.NConfirmButton embarkButton
                     && embarkButton.IsEnabled)
                     return ExecutionResult.Success();
             }
@@ -92,16 +92,16 @@ public class CharacterSelectHandler : IContextHandler
         }
         return ExecutionResult.ModFailure("Unkown Action for Character Selection, only select_character and embark are valid actions");
     }
-    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
     {
         if (action.Name == "select_character")
         {
             var character_name = root.GetProperty("character").GetString();
             var btn = ctx?.CharacterButtons?.Find((btn) => GetCharacterName(btn) == character_name);
             if (!GodotObject.IsInstanceValid(btn))
-                return ActionResult.Error("Character button is no longer valid");
+                return ExecutionResult.Failure("Character button is no longer valid");
             if (btn.IsLocked)
-                return ActionResult.Error("Character is locked");
+                return ExecutionResult.Failure("Character is locked");
 
             await GodotMainThread.RunAsync(() => btn.Select());
 
@@ -114,21 +114,21 @@ public class CharacterSelectHandler : IContextHandler
             GameStabilityDetector.ResetWasStable();
             Plugin.Log($"Selected character: {name}");
             NeuroIntegration.SendContext(character_descriptor.ToString());
-            return ActionResult.Ok($"Selected character: {name}");
+            return ExecutionResult.Success($"Selected character: {name}");
         }
 
         if (action.Name == "embark")
         {
             var screen = ctx.CharacterSelectScreen;
             if (screen == null || !GodotObject.IsInstanceValid(screen))
-                return ActionResult.Error("Character select screen not found");
+                return ExecutionResult.Failure("Character select screen not found");
 
             var embarkButton = await GodotMainThread.RunAsync(() =>
-                screen.GetNode<Godot.Control>("ConfirmButton") as MegaCrit.Sts2.Core.Nodes.CommonUi.NConfirmButton);
+                screen.GetNode<Control>("ConfirmButton") as MegaCrit.Sts2.Core.Nodes.CommonUi.NConfirmButton);
             if (embarkButton == null)
-                return ActionResult.Error("Embark button not found");
+                return ExecutionResult.Failure("Embark button not found");
             if (!embarkButton.IsEnabled)
-                return ActionResult.Error("Embark button is not enabled (select a character first)");
+                return ExecutionResult.Failure("Embark button is not enabled (select a character first)");
 
 
             await GodotMainThread.ClickAsync(embarkButton);
@@ -142,7 +142,7 @@ public class CharacterSelectHandler : IContextHandler
             }
 
             Plugin.Log("Embarked on run");
-            return ActionResult.Ok("Embarked on run");
+            return ExecutionResult.Success("Embarked on run");
         }
 
         return null;

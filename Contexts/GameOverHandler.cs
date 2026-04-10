@@ -13,6 +13,7 @@ using STS2NeuroIntegration;
 using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
+using System.Text;
 
 namespace Sts2Agent.Contexts;
 
@@ -87,6 +88,54 @@ public class GameOverHandler : IContextHandler
         return result;
     }
 
+
+    public string GetContext(ContextInfo ctx)
+    {
+        StringBuilder stringBuilder = new();
+        var history = RunManager.Instance?.History;
+        if (history == null)
+        {
+            stringBuilder.AppendLine("You have lost the game");
+            return stringBuilder.ToString();
+        }
+
+        stringBuilder.AppendLine($"You have {(history.Win ? "won" : "lost")} the game");
+        stringBuilder.AppendLine($"Ascension: {history.Ascension}");
+        stringBuilder.AppendLine($"Run time: {history.RunTime}");
+        stringBuilder.AppendLine($"Floor reached: {history.MapPointHistory.Sum(act => act.Count)}");
+
+        if (!history.Win)
+        {
+            if (history.KilledByEncounter != ModelId.none)
+            {
+                var encounter = ModelDb.GetByIdOrNull<EncounterModel>(history.KilledByEncounter);
+                stringBuilder.AppendLine($"You were killed by {TextHelper.SafeLocString(() => encounter?.Title)}");
+            }
+            else if (history.KilledByEvent != ModelId.none)
+            {
+                var evt = ModelDb.GetByIdOrNull<EventModel>(history.KilledByEvent);
+                stringBuilder.AppendLine($"You were killed by {TextHelper.SafeLocString(() => evt?.Title)}");
+            }
+        }
+
+        var runState = RunManager.Instance?.DebugOnlyGetState();
+        if (runState != null)
+        {
+            stringBuilder.AppendLine($"Score: {ScoreUtility.CalculateScore(runState, history.Win)}");
+        }
+
+        if (history.Players.Count > 0)
+        {
+            var player = (LocalContext.NetId.HasValue
+                ? history.Players.FirstOrDefault(p => p.Id == LocalContext.NetId.Value)
+                : null) ?? history.Players[0];
+            var charModel = ModelDb.GetByIdOrNull<CharacterModel>(player.Character);
+            stringBuilder.AppendLine($"Character: {(charModel != null ? TextHelper.SafeLocString(() => charModel.Title) : player.Character)}");
+            stringBuilder.AppendLine($"Deck size: {player.Deck.Count()}");
+            stringBuilder.AppendLine($"Relic count: {player.Relics.Count()}");
+        }
+        return stringBuilder.ToString();
+    }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
@@ -99,18 +148,24 @@ public class GameOverHandler : IContextHandler
         if (phase == Phase.MainMenu)
         {
             // commands.Add(new() { ["type"] = "continue" });
+            commands.Add(new("continue", "Continue"));
         }
         else
         {
             var continueBtn = UiHelper.FindFirst<NGameOverContinueButton>(screen);
-            // if (continueBtn != null && continueBtn.IsEnabled)
-            //     commands.Add(new() { ["type"] = "continue" });
+            if (continueBtn != null && continueBtn.IsEnabled)
+                commands.Add(new("continue", "Continue"));
         }
 
         return commands;
     }
 
-    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    {
+        throw new NotImplementedException();
+    }
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
 
     {
         if (action.Name == "continue")
@@ -118,7 +173,7 @@ public class GameOverHandler : IContextHandler
         return null;
     }
 
-    private async Task<ActionResult.Result> AdvanceGameOver()
+    private async Task<ExecutionResult> AdvanceGameOver()
     {
         var screen = await GodotMainThread.RunAsync(() =>
         {
@@ -127,7 +182,7 @@ public class GameOverHandler : IContextHandler
         });
 
         if (screen == null)
-            return ActionResult.Error("Game over screen not found");
+            return ExecutionResult.Failure("Game over screen not found");
 
         var phase = await GodotMainThread.RunAsync(() => GetPhase(screen));
 
@@ -135,35 +190,25 @@ public class GameOverHandler : IContextHandler
         {
             var continueBtn = await GodotMainThread.RunAsync(() => UiHelper.FindFirst<NGameOverContinueButton>(screen));
             if (continueBtn == null)
-                return ActionResult.Error("Continue button not found");
+                return ExecutionResult.Failure("Continue button not found");
 
             var enabled = await GodotMainThread.RunAsync(() => continueBtn.IsEnabled);
             if (!enabled)
-                return ActionResult.Error("Continue button not yet enabled");
+                return ExecutionResult.Failure("Continue button not yet enabled");
 
             await GodotMainThread.ClickAsync(continueBtn);
             Plugin.Log("Clicked continue on game over screen");
-            return ActionResult.Ok("Clicked continue, summary playing");
+            return ExecutionResult.Success("Clicked continue, summary playing");
         }
         else
         {
             var mainMenuBtn = await GodotMainThread.RunAsync(() => UiHelper.FindFirst<NReturnToMainMenuButton>(screen));
             if (mainMenuBtn == null)
-                return ActionResult.Error("Main menu button not found");
+                return ExecutionResult.Failure("Main menu button not found");
 
             await GodotMainThread.ClickAsync(mainMenuBtn);
             Plugin.Log("Clicked return to main menu on game over screen");
-            return ActionResult.Ok("Returning to main menu");
+            return ExecutionResult.Success("Returning to main menu");
         }
-    }
-
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
-    {
-        throw new NotImplementedException();
-    }
-
-    public string GetContext(ContextInfo ctx)
-    {
-        throw new NotImplementedException();
     }
 }

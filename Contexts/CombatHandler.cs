@@ -104,7 +104,7 @@ public class CombatHandler : IContextHandler
             }
         }
         stringBuilder.AppendLine();
-        stringBuilder.AppendLine($"You currently have {pcs.Hand.Cards.Count} Cards in hand");
+        stringBuilder.AppendLine($"You currently have {pcs?.Hand.Cards.Count} Cards in hand");
         stringBuilder.RepresentDeck(pcs.Hand.Cards);
         var events = EventLog.DrainAll();
         if (events.Count > 0)
@@ -141,10 +141,6 @@ public class CombatHandler : IContextHandler
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var pcs = player.PlayerCombatState;
         if (pcs == null) return commands;
-
-
-
-
         //TODO: this might require changes for multiplayer as. there are TargetType.AnyPlayer too
         var ally_target_cards = pcs.Hand.Cards.Where((x) => x.TargetType == TargetType.AnyAlly && x.CanPlay()).Select(x => x.Title).Distinct();
 
@@ -232,13 +228,36 @@ public class CombatHandler : IContextHandler
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
     {
         parsedData = data.Data;
-        //TODO: Actual Validation
+        if (action.Name == "play_enemy_target_card" || action.Name == "play_ally_target_card" || action.Name == "play_card")
+        {
+            var cm = CombatManager.Instance;
+            if (cm == null) return ExecutionResult.Failure("Not in combat");
+            if (cm.IsOverOrEnding) return ExecutionResult.Failure("Combat is ending");
+            if (!cm.IsPlayPhase) return ExecutionResult.Failure("Not in play phase");
+
+            var cardIndex = data.Data?["card"]?.GetValue<string>();
+            if (cardIndex == null)
+                return ExecutionResult.Failure("card field is missing");
+            if (ctx == null)
+                return ExecutionResult.ModFailure("Invalid Ctx");
+            if (ctx.RunState == null)
+                return ExecutionResult.ModFailure("Runstate is invalid currently");
+
+            var player = LocalContext.GetMe(ctx.RunState.Players);
+            var pcs = player?.PlayerCombatState;
+            if (pcs == null) return ExecutionResult.Failure("No player combat state");
+
+            var hand = pcs.Hand.Cards;
+            if (hand == null || hand.Count <= 0)
+                return ExecutionResult.Failure($"Hand isn't valid");
+            var card = hand.FirstOrDefault((x) => x?.Title == cardIndex);
+            if (card == null || !card.CanPlay())
+                return ExecutionResult.Failure($"Card '{cardIndex}' cannot be played");
+        }
         return ExecutionResult.Success();
     }
-    public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
-
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
     {
-        GameStabilityDetector.ResetWasStable();
         firstContext = false;
         return action.Name switch
         {
@@ -249,29 +268,37 @@ public class CombatHandler : IContextHandler
         };
     }
 
-    private async Task<ActionResult.Result> PlayCard(JsonElement root, ContextInfo ctx)
+    private async Task<ExecutionResult> PlayCard(JsonElement root, ContextInfo ctx)
     {
         var cm = CombatManager.Instance;
-        if (cm == null) return ActionResult.Error("Not in combat");
-        if (cm.IsOverOrEnding) return ActionResult.Error("Combat is ending");
-        if (!cm.IsPlayPhase) return ActionResult.Error("Not in play phase");
+        if (cm == null) return ExecutionResult.Failure("Not in combat");
+        if (cm.IsOverOrEnding) return ExecutionResult.Failure("Combat is ending");
+        if (!cm.IsPlayPhase) return ExecutionResult.Failure("Not in play phase");
 
         var cardIndex = root.GetProperty("card").GetString();
         var player = LocalContext.GetMe(ctx.RunState.Players);
-        var pcs = player.PlayerCombatState;
-        if (pcs == null) return ActionResult.Error("No player combat state");
+        var pcs = player?.PlayerCombatState;
+        if (pcs == null) return ExecutionResult.Failure("No player combat state");
 
         var hand = pcs.Hand.Cards;
+        if (hand == null || hand.Count <= 0)
+            return ExecutionResult.Failure($"Hand isn't valid");
         var card = hand.FirstOrDefault((x) => x.Title == cardIndex);
         if (card == null || !card.CanPlay())
             return ActionResult.Error($"Card '{card.Title}' cannot be played");
+            return ExecutionResult.Failure($"Card '{cardIndex}' cannot be played");
 
-        var combatState = card.CombatState ?? card.Owner.Creature.CombatState;
+        var combatState = card?.CombatState;
+        if (combatState == null)
+        {
+            return ExecutionResult.Failure("card's Combat state is null");
+        }
 
         var aliveEnemies = combatState.HittableEnemies.ToList();
+        Plugin.LogDebug("test");
 
         Creature? target = null;
-        if (card.TargetType == TargetType.AnyEnemy)
+        if (card!.TargetType == TargetType.AnyEnemy)
         {
             if (root.TryGetProperty("target", out var targetProp))
             {
@@ -292,7 +319,7 @@ public class CombatHandler : IContextHandler
                 target = aliveEnemies.FirstOrDefault();
             }
             if (target == null)
-                return ActionResult.Error("No valid target available");
+                return ExecutionResult.Failure("No valid target available");
         }
         else if (card.TargetType == TargetType.AnyAlly)
         {
@@ -302,23 +329,32 @@ public class CombatHandler : IContextHandler
                 : allies.FirstOrDefault();
         }
 
-        var played = await GodotMainThread.RunAsync(() => card.TryManualPlay(target));
-        if (!played)
-            return ActionResult.Error($"Card '{card.Title}' play was rejected by the game");
+        try
+        {
 
+            var played = card.TryManualPlay(target);
+            if (!played)
+                return ExecutionResult.Failure($"Card '{card.Title}' play was rejected by the game");
+
+        }
+        catch (Exception e)
+        {
+            Plugin.LogDebug(e.Message);
+            return ExecutionResult.Failure("Playing the card threw");
+        }
         Plugin.Log($"Played card '{card.Title}'" + (target != null ? " targeting enemy" : ""));
-        return ActionResult.Ok("Card played");
+        return ExecutionResult.Success("Card played");
     }
 
-    private ActionResult.Result EndTurn(ContextInfo ctx)
+    private ExecutionResult EndTurn(ContextInfo ctx)
     {
         var cm = CombatManager.Instance;
-        if (cm == null) return ActionResult.Error("Not in combat");
-        if (!cm.IsPlayPhase || !cm.IsInProgress) return ActionResult.Error("Not in play phase");
+        if (cm == null) return ExecutionResult.Failure("Not in combat");
+        if (!cm.IsPlayPhase || !cm.IsInProgress) return ExecutionResult.Failure("Not in play phase");
 
         var player = LocalContext.GetMe(ctx.RunState.Players);
         if (cm.IsPlayerReadyToEndTurn(player))
-            return ActionResult.Error("Turn already ended");
+            return ExecutionResult.Failure("Turn already ended");
 
         var roundNumber = player.Creature.CombatState.RoundNumber;
         Callable.From(() =>
@@ -329,10 +365,10 @@ public class CombatHandler : IContextHandler
 
         Plugin.Log("Ended turn");
         firstContext = true;
-        return ActionResult.Ok("Turn ended");
+        return ExecutionResult.Success("Turn ended");
     }
 
-    private ActionResult.Result UsePotion(JsonElement root, ContextInfo ctx)
+    private ExecutionResult UsePotion(JsonElement root, ContextInfo ctx)
     {
         var slot = root.GetProperty("potion").GetString();
         var player = LocalContext.GetMe(ctx.RunState.Players);
@@ -341,7 +377,7 @@ public class CombatHandler : IContextHandler
 
         var potion = potions.FirstOrDefault((p) => TextHelper.SafeLocString(() => p.Title) == slot);
         if (potion == null)
-            return ActionResult.Error($"No potion in slot {slot}");
+            return ExecutionResult.Failure($"No potion in slot {slot}");
 
         // Resolve target based on potion's target type
         Creature? target = null;
@@ -362,7 +398,7 @@ public class CombatHandler : IContextHandler
                     target = aliveEnemies.FirstOrDefault();
                 }
                 if (target == null)
-                    return ActionResult.Error("No valid target for potion");
+                    return ExecutionResult.Failure("No valid target for potion");
             }
         }
         else
@@ -373,7 +409,7 @@ public class CombatHandler : IContextHandler
 
         Callable.From(() => potion.EnqueueManualUse(target)).CallDeferred();
         Plugin.Log($"Used potion in slot {slot}");
-        return ActionResult.Ok("Potion used");
+        return ExecutionResult.Success("Potion used");
     }
 
     private static void PrettyRenderEnemies(StringBuilder stringBuilder, IReadOnlyList<Creature> enemies, CombatState combatState)
