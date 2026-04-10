@@ -294,7 +294,6 @@ public class CombatHandler : IContextHandler
         }
 
         var aliveEnemies = combatState.HittableEnemies.ToList();
-        Plugin.LogDebug("test");
 
         Creature? target = null;
         if (card!.TargetType == TargetType.AnyEnemy)
