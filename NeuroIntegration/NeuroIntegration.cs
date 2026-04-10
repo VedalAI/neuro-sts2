@@ -133,14 +133,14 @@ public class NeuroIntegration : Node
         }
       }
       NeuroActionHandler.RegisterActions(new_global_actions);
-      window.SetForce(5, "It's your Turn please do an Action", null);
+      window.SetForce(1, "It's your Turn please do an Action", null);
       window.Register();
     }
     else
     {
       Plugin.LogError("Decision Point Reached without actual commands to run!");
       GameStabilityDetector.ResetWasStable();
-      GameStabilityDetector.ScheduleStabilityCheck();
+      GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
     }
   }
 

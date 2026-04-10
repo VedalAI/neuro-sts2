@@ -49,6 +49,7 @@ public class ShopHandler : IContextHandler
         {
             // commands.Add(new Dictionary<string, object> { ["type"] = "shop_open" });
             // commands.Add(new Dictionary<string, object> { ["type"] = "shop_leave" });
+            commands.Add(new("shop_leave", "Leave the Shop"));
             return commands;
         }
 
@@ -68,6 +69,7 @@ public class ShopHandler : IContextHandler
                 }
             }
         }
+        commands.Add(new("shop_leave", "Leave the Shop"));
 
         // commands.Add(new Dictionary<string, object> { ["type"] = "shop_leave" });
         return commands;
@@ -75,12 +77,13 @@ public class ShopHandler : IContextHandler
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
     {
-        throw new NotImplementedException();
+        parsedData = data.Data;
+        return ExecutionResult.Success();
     }
 
     public string GetContext(ContextInfo ctx)
     {
-        throw new NotImplementedException();
+        return "You are at a Shop";
     }
 
     public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
