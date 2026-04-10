@@ -68,7 +68,7 @@ public class GameOverHandler : IContextHandler
         var runState = RunManager.Instance?.DebugOnlyGetState();
         if (runState != null)
         {
-            result["score"] = ScoreUtility.CalculateScore(runState, LocalContext.NetId ?? 0, history.Win);
+            result["score"] = ScoreUtility.CalculateScore(runState, history.Win);
         }
 
         if (history.Players.Count > 0)

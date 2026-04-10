@@ -95,7 +95,7 @@ public static class TextHelper
         }
         catch
         {
-            return SafeLocString(() => relic.Description);
+            return SafeLocString(() => relic.DynamicDescription);
         }
     }
 
@@ -107,7 +107,7 @@ public static class TextHelper
         }
         catch
         {
-            return SafeLocString(() => potion.Description);
+            return SafeLocString(() => potion.DynamicDescription);
         }
     }
 
