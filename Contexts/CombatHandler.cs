@@ -157,18 +157,10 @@ public class CombatHandler : IContextHandler
 
             if (enemy_target_cards.Any())
             {
-                var is_distinct = ctx.CombatState!.HittableEnemies.Count == ctx.CombatState.HittableEnemies.DistinctBy((e) => e.Name).Count();
                 commands.Add(new("play_enemy_target_card", "Select a card that requires a enemy Target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
                 {
                     ["card"] = QJS.Enum(enemy_target_cards),
-                    ["target"] = QJS.Enum(ctx.CombatState!.HittableEnemies.Select(
-                        (e, i) =>
-                        {
-                            if (is_distinct)
-                                return e.Name;
-                            else
-                                return $"[{i}] " + e.Name;
-                        }))
+                    ["target"] = QJS.Enum(ctx.CombatState.HittableEnemies.GetUniqueNames())
                 })));
             }
             if (none_target_cards.Any())
@@ -185,7 +177,7 @@ public class CombatHandler : IContextHandler
                     commands.Add(new("use_target_potion", "use a potion on a target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
                     {
                         ["potion"] = QJS.Enum(targeted_potions.Select((x) => TextHelper.SafeLocString(() => x.Title)).Distinct()),
-                        ["target"] = QJS.Enum(ctx.CombatState!.HittableEnemies.Select((c) => c.Name))//TODO: require collision checks
+                        ["target"] = QJS.Enum(ctx.CombatState!.HittableEnemies.GetUniqueNames())
                     }
                     )));
                 var none_targeted_potions = player.Potions.Where((p) => p.TargetType is not (TargetType.AnyEnemy or TargetType.TargetedNoCreature));
@@ -224,7 +216,7 @@ public class CombatHandler : IContextHandler
             commands.Add(new("play_ally_target_card", "Select a card that requires a allied Target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
                 ["card"] = QJS.Enum(ally_target_cards),
-                ["target"] = QJS.Enum(ctx.CombatState.Allies.Select((a) => a.Name)) //TODO: better way to identify which one
+                ["target"] = QJS.Enum(ctx.CombatState.Allies.GetUniqueNames())
             })));
         }
 
@@ -240,6 +232,7 @@ public class CombatHandler : IContextHandler
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
     {
         parsedData = data.Data;
+        //TODO: Actual Validation
         return ExecutionResult.Success();
     }
     public async Task<ActionResult.Result?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
@@ -275,7 +268,6 @@ public class CombatHandler : IContextHandler
 
         var combatState = card.CombatState ?? card.Owner.Creature.CombatState;
 
-        // Use the same alive-enemy list as serialization so indices match
         var aliveEnemies = combatState.HittableEnemies.ToList();
 
         Creature? target = null;
@@ -284,7 +276,16 @@ public class CombatHandler : IContextHandler
             if (root.TryGetProperty("target", out var targetProp))
             {
                 var targetIndex = targetProp.GetString();
-                target = aliveEnemies.FirstOrDefault((e) => e.Name == targetIndex);
+                Plugin.LogDebug($"target: {targetIndex}");
+                target = aliveEnemies.GetUniqueCreature(targetIndex!);
+                var unique = aliveEnemies.CreaturesAreDistinct();
+                for (int i = 0; i < aliveEnemies.Count; i++)
+                {
+                    Creature? targets = aliveEnemies[i];
+                    Plugin.LogDebug($"all_enemies: {targets.GetUniqueName(unique, i)}");
+
+                }
+                Plugin.LogDebug($"found target: {target}");
             }
             else
             {
@@ -354,15 +355,7 @@ public class CombatHandler : IContextHandler
                 if (root.TryGetProperty("target", out var targetProp))
                 {
                     var targetIndex = targetProp.GetString();
-                    var is_distinct = aliveEnemies.DistinctBy((e) => e.Name).Count() != aliveEnemies.Count;
-                    target = (Creature?)aliveEnemies.Select((e, i) =>
-                    {
-                        if (is_distinct && e.Name == targetIndex)
-                            return e;
-                        if ($"[{i}] " + e.Name == targetIndex)
-                            return e;
-                        else { return null; }
-                    });
+                    target = aliveEnemies.GetUniqueCreature(targetIndex!);
                 }
                 else
                 {
@@ -386,15 +379,11 @@ public class CombatHandler : IContextHandler
     private static void PrettyRenderEnemies(StringBuilder stringBuilder, IReadOnlyList<Creature> enemies, CombatState combatState)
     {
 
-        var enemies_are_distinct = enemies.Count == enemies.DistinctBy((e) => e.Name).Count();
+        var enemies_are_distinct = enemies.CreaturesAreDistinct();
         for (int i = 0; i < enemies.Count; i++)
         {
             Creature? enemy = enemies[i];
-            var enemy_name = "";
-            if (enemies_are_distinct)
-                enemy_name = enemy.Name;
-            else
-                enemy_name = $"[{i}] " + enemy.Name;
+            var enemy_name = enemy.GetUniqueName(enemies_are_distinct, i);
 
             stringBuilder.Append($"\t- {enemy_name} has {enemy.CurrentHp} hp out of {enemy.MaxHp} maxhp ");
             stringBuilder.Append($", It has {enemy.Block} Block");
