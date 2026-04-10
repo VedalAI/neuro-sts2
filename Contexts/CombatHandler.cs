@@ -285,7 +285,6 @@ public class CombatHandler : IContextHandler
             return ExecutionResult.Failure($"Hand isn't valid");
         var card = hand.FirstOrDefault((x) => x.Title == cardIndex);
         if (card == null || !card.CanPlay())
-            return ActionResult.Error($"Card '{card.Title}' cannot be played");
             return ExecutionResult.Failure($"Card '{cardIndex}' cannot be played");
 
         var combatState = card?.CombatState;
