@@ -19,50 +19,13 @@ using MegaCrit.Sts2.Core.Models.Cards;
 
 namespace Sts2Agent.Contexts;
 
-public class BundleSelectionHandler : IContextHandler
+public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.BundleSelectionResult>
 {
-    public ContextType Type => ContextType.BundleSelection;
-
-    public Dictionary<string, object>? SerializeState(ContextInfo ctx)
+    public class BundleSelectionResult
     {
-        var bundles = ctx.Bundles;
-        if (bundles == null || bundles.Count == 0) return null;
-
-        var bundleList = bundles
-            .Select((b, i) =>
-            {
-                if (b.Bundle == null) return null;
-                var cards = b.Bundle
-                    .Select(card =>
-                    {
-                        var d = new Dictionary<string, object>
-                        {
-                            ["name"] = card.Title,
-                            ["description"] = TextHelper.GetCardDescription(card)
-                        };
-                        if (card.EnergyCost != null)
-                        {
-                            d["cost"] = card.EnergyCost.CostsX ? "X" : (object)card.EnergyCost.Canonical;
-                        }
-                        return d;
-                    })
-                    .ToList();
-                return new Dictionary<string, object>
-                {
-                    ["index"] = i,
-                    ["cards"] = cards
-                };
-            })
-            .Where(b => b != null)
-            .ToList();
-
-        return new Dictionary<string, object>
-        {
-            ["type"] = "bundle_selection",
-            ["bundles"] = bundleList
-        };
+        public NCardBundle? SelectedBundle;
     }
-
+    public ContextType Type => ContextType.BundleSelection;
 
     public string GetContext(ContextInfo ctx)
     {
@@ -106,38 +69,41 @@ public class BundleSelectionHandler : IContextHandler
         return commands;
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, ref BundleSelectionResult parsedData, ContextInfo ctx)
     {
-        //TODO: Proper Validation
-        parsedData = data.Data;
-        return ExecutionResult.Success();
-    }
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
-
-    {
-        return action.Name switch
-        {
-            "select_bundle" => await SelectBundle(root, ctx),
-            _ => null
-        };
-    }
-
-    private async Task<ExecutionResult> SelectBundle(JsonElement root, ContextInfo ctx)
-    {
-        var bundleIndex = root.GetProperty("bundleIndex").GetInt32();
+        var bundleIndex = data.Data?["bundleIndex"]?.GetValue<int>() ?? -1;
+        if (bundleIndex < 0)
+            return ExecutionResult.Failure("Bundle index not found");
         var bundles = ctx.Bundles;
 
         if (bundles == null || bundleIndex < 0 || bundleIndex >= bundles.Count)
             return ExecutionResult.Failure($"Bundle index {bundleIndex} out of range (available: {bundles?.Count ?? 0})");
 
         var bundle = bundles[bundleIndex];
+        if (bundle == null) return ExecutionResult.ModFailure($"Bundle {bundleIndex} not found");
+        parsedData.SelectedBundle = bundle;
+        return ExecutionResult.Success();
+    }
+    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, BundleSelectionResult result, ContextInfo ctx)
+    {
+        return action.Name switch
+        {
+            "select_bundle" => await SelectBundle(result, ctx),
+            _ => null
+        };
+    }
+
+    private async Task<ExecutionResult> SelectBundle(BundleSelectionResult result, ContextInfo ctx)
+    {
         var overlayNode = ctx.OverlayNode;
         var overlayScreen = ctx.OverlayScreen;
+        if (result.SelectedBundle == null)
+            return ExecutionResult.Failure("Bundle not selected");
 
         // Click the bundle to open preview
         await GodotMainThread.RunAsync(() =>
         {
-            bundle.EmitSignal(NCardBundle.SignalName.Clicked, bundle);
+            result.SelectedBundle.EmitSignal(NCardBundle.SignalName.Clicked, result.SelectedBundle);
         });
 
         // Wait for preview to appear with confirm button
@@ -167,13 +133,12 @@ public class BundleSelectionHandler : IContextHandler
             if (overlayNode == null || !GodotObject.IsInstanceValid(overlayNode)
                 || NOverlayStack.Instance?.Peek() != overlayScreen)
             {
-                Plugin.Log($"Selected bundle {bundleIndex}");
+                Plugin.Log($"Selected bundle {result.SelectedBundle.Name}");
                 return ExecutionResult.Success("Bundle selected");
             }
         }
 
-        Plugin.Log($"Selected bundle {bundleIndex} (overlay may still be closing)");
+        Plugin.Log($"Selected bundle {result.SelectedBundle.Name} (overlay may still be closing)");
         return ExecutionResult.Success("Bundle selected");
     }
-
 }
