@@ -47,7 +47,7 @@ public static class ActionExecutor
             var handler = Handlers.FirstOrDefault(h => h.Type == ctx.Type);
             if (handler != null)
             {
-                return handler.Validate(action, data, out parsedData, ctx);
+                return handler.Internal_Validate(action, data, out parsedData, ctx);
             }
 
             return ExecutionResult.Failure($"Unknown action '{action.Name}' for context '{ctx.Type}'");
@@ -79,7 +79,7 @@ public static class ActionExecutor
                 var json_elements = JsonDocument.Parse(JsonSerializer.Serialize(ParsedData, NeuroIntegration.JsonOptions));
                 _ = (GodotMainThread.RunAsync(async () =>
                 {
-                    var result = await handler?.TryExecute(action, json_elements?.RootElement ?? new(), ctx) ?? ExecutionResult.ModFailure("handler didn't return awaitable");
+                    var result = await handler?.Internal_TryExecute(action, json_elements?.RootElement ?? new(), ctx) ?? ExecutionResult.ModFailure("handler didn't return awaitable");
                     if (result.Successful)
                     {
                         Plugin.LogDebug("Action Successful with message: " + result.Message);
