@@ -65,7 +65,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
                     stringBuilder.AppendLine($"Currently you have these orbs in order of usage:");
                     foreach (var orb in pcs.OrbQueue.Orbs)
                     {
-                        stringBuilder.AppendLine($"- {TextHelper.SafeLocString(() => orb.Title)} it does {orb.PassiveVal} passive and {orb.EvokeVal} on Evoked");
+                        stringBuilder.AppendLine($"- {TextHelper.SafeLocString(() => orb.Title)} it does {orb.PassiveVal} damage passive and {orb.EvokeVal} damage on Evoked");
                     }
 
                 }
