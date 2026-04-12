@@ -18,12 +18,12 @@ using NeuroSdk.Json;
 
 namespace Sts2Agent.Contexts;
 
-public class CardSelectionHandler : IContextHandler<CardSelectionHandler.CardSelectionResult>
+public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
 {
     public ContextType Type => ContextType.CardSelection;
 
 
-    public class CardSelectionResult
+    public class Result : IContextResult
     {
         public NCardHolder SelectedCard;
         public List<NCardHolder> MultipleCards;
@@ -62,6 +62,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.CardSel
             }
             catch { }
         }
+        Plugin.LogDebug($"min_select: {min_select}, max_select:{max_select}");
         if (max_select > 1)
         {
             commands.Add(new("select_multiple_cards", min_select != max_select ? $"Select {min_select} up to {max_select} cards" : $"Select {max_select} cards", QJS.WrapObject(new Dictionary<string, JsonSchema>
@@ -93,7 +94,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.CardSel
         return commands;
     }
 
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, CardSelectionResult result, ContextInfo ctx)
+    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
     {
         return action.Name switch
         {
@@ -104,7 +105,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.CardSel
         };
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, ref CardSelectionResult result, ContextInfo? ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo? ctx)
     {
         if (action.Name == "skip")
         {
@@ -162,16 +163,14 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.CardSel
 
         return ExecutionResult.Failure("Unkown Action");
     }
-    private async Task<ExecutionResult> SelectCard(CardSelectionResult result, ContextInfo ctx)
+    private async Task<ExecutionResult> SelectCard(Result result, ContextInfo ctx)
     {
         if (result.SelectedCard == null)
         {
             Plugin.LogError($"[CRITICAL] Missing Parameter SelectedCard Even tho it passed validation");
             return ExecutionResult.Failure("Missing Parameter card");
         }
-
-        if (ctx.OverlayScreen == null || ctx.OverlayNode == null)
-            return ExecutionResult.Failure("No card selection screen open");
+        Plugin.LogDebug("Selecting card: " + result.SelectedCard?.ToString());
 
         // Wait for _completionSource to be set
         var tcsField = ctx.OverlayScreen.GetType().GetField("_completionSource",
@@ -212,7 +211,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.CardSel
         if (!isGridScreen)
         {
             await WaitForOverlayClose(ctx.OverlayNode, ctx.OverlayScreen);
-            Plugin.Log($"Selected card {result.SelectedCard.CardNode!.Model!.Title}");
+            Plugin.Log($"Selected card {selectedCardName}");
             return ExecutionResult.Success("Card selected");
         }
 
@@ -220,7 +219,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.CardSel
         await Task.Delay(200);
         if (!GodotObject.IsInstanceValid(ctx.OverlayNode) || NOverlayStack.Instance?.Peek() != ctx.OverlayScreen)
         {
-            Plugin.LogDebug($"Selected card {result.SelectedCard.CardNode!.Model!.Title} (screen auto-closed)");
+            Plugin.Log($"Selected card {selectedCardName}");
             return ExecutionResult.Success("Card selected");
         }
 
@@ -250,15 +249,15 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.CardSel
             Plugin.LogDebug("SelectCard: partial selection (no confirm enabled yet)");
         }
 
-        Plugin.Log($"Selected card {result.SelectedCard.CardNode!.Model!.Title}");
+        Plugin.Log($"Selected card {selectedCardName}");
         return ExecutionResult.Success("Card selected");
     }
 
-    private async Task<ExecutionResult> SelectMultipleCards(ContextInfo ctx, CardSelectionResult result)
+    private async Task<ExecutionResult> SelectMultipleCards(ContextInfo ctx, Result result)
     {
         foreach (var card in result.MultipleCards)
         {
-            var selection_proxy = new CardSelectionResult
+            var selection_proxy = new Result
             {
                 SelectedCard = card
             };

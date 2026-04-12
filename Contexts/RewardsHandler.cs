@@ -16,11 +16,16 @@ using Sts2Agent.Utilities;
 using NeuroSdk.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
+using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 
 namespace Sts2Agent.Contexts;
 
-public class RewardsHandler : IContextHandler
+public class RewardsHandler : IContextHandler<RewardsHandler.Result>
 {
+    public class Result : IContextResult
+    {
+        public NButton Button;
+    }
     public ContextType Type => ContextType.Rewards;
 
     public string GetContext(ContextInfo ctx)
@@ -51,6 +56,12 @@ public class RewardsHandler : IContextHandler
             };
             stringBuilder.AppendLine($"- [{i}] {type} Reward: {TextHelper.SafeLocString(() => reward.Description)}");
         }
+        if (buttons.Count <= 0)
+        {
+            var button = UiHelper.FindFirst<NProceedButton>(rewardsScreen);
+            if (button == null)
+                GameStabilityDetector.ResetWasStable(); // the Rewards screen on an event might not be populated yet.
+        }
         return stringBuilder.ToString();
     }
 
@@ -61,15 +72,18 @@ public class RewardsHandler : IContextHandler
         if (rewardsScreen == null) return commands;
 
         var buttons = GetEnabledRewardButtons(rewardsScreen);
-        commands.Add(new("select_reward", "Select a reward", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+        if (buttons.Count <= 0)
         {
-            ["rewardIndex"] = new()
+            commands.Add(new("select_reward", "Select a reward", QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
-                Type = JsonSchemaType.Integer,
-                Minimum = 0,
-                Maximum = buttons.Count - 1
-            }
-        })));
+                ["rewardIndex"] = new()
+                {
+                    Type = JsonSchemaType.Integer,
+                    Minimum = 0,
+                    Maximum = buttons.Count - 1
+                }
+            })));
+        }
 
         var proceedButton = UiHelper.FindFirst<NProceedButton>((Node)rewardsScreen);
         if (proceedButton?.IsEnabled == true)
@@ -78,57 +92,57 @@ public class RewardsHandler : IContextHandler
         return commands;
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
     {
-        //TODO: Proper Validation
-        parsedData = data.Data;
-        return ExecutionResult.Success();
-    }
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
-
-    {
-        return action.Name switch
-        {
-            "select_reward" => await SelectReward(root, ctx),
-            "proceed" => await Proceed(ctx),
-            _ => null
-        };
-    }
-
-    private async Task<ExecutionResult> SelectReward(JsonElement root, ContextInfo ctx)
-    {
-        var rewardIndex = root.GetProperty("rewardIndex").GetInt32();
         var rewardsScreen = ctx.RewardsScreen;
         if (rewardsScreen == null)
             return ExecutionResult.Failure("No rewards screen");
 
-        var buttons = GetEnabledRewardButtons(rewardsScreen);
-        if (rewardIndex < 0 || rewardIndex >= buttons.Count)
-            return ExecutionResult.Failure($"Reward index {rewardIndex} out of range (available: {buttons.Count})");
+        if (action.Name == "select_reward")
+        {
+            var rewardIndex = data.Data?["rewardIndex"]?.GetValue<int>();
+            if (rewardIndex == null)
+                return ExecutionResult.Failure("No reward index specified");
+            var buttons = GetEnabledRewardButtons(rewardsScreen);
+            if (rewardIndex < 0 || rewardIndex >= buttons.Count)
+                return ExecutionResult.Failure($"Reward index {rewardIndex} out of range (available: {buttons.Count})");
 
-        await GodotMainThread.ClickAsync(buttons[rewardIndex]);
-        GameStabilityDetector.ResetWasStable();
-        Plugin.Log($"Selected reward {rewardIndex}");
+            result.Button = buttons[(int)rewardIndex];
+        }
+        else
+        {
+            var button = UiHelper.FindFirst<NProceedButton>(rewardsScreen);
+            if (button == null)
+                return ExecutionResult.Failure("No proceed button found");
+            result.Button = button;
+        }
+        return ExecutionResult.Success();
+    }
+    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
+    {
+        return action.Name switch
+        {
+            "select_reward" => await SelectReward(result),
+            "proceed" => await Proceed(result),
+            _ => null
+        };
+    }
+
+    private async Task<ExecutionResult> SelectReward(Result root)
+    {
+        await GodotMainThread.ClickAsync(root.Button);
+        // GameStabilityDetector.ResetWasStable();
+        Plugin.Log($"Selected reward");
         return ExecutionResult.Success("Reward selected");
     }
 
-    private async Task<ExecutionResult> Proceed(ContextInfo ctx)
+    private async Task<ExecutionResult> Proceed(Result result)
     {
         // Try proceed button on rewards overlay first
-        if (ctx.RewardsScreen != null)
-        {
-            var button = UiHelper.FindFirst<NProceedButton>((Node)ctx.RewardsScreen);
-            if (button != null)
-            {
-                await GodotMainThread.ClickAsync(button);
-                Plugin.Log("Clicked proceed on rewards");
-                GameStabilityDetector.ResetWasStable();
-                return ExecutionResult.Success("Proceeded");
-            }
-        }
-
-        GameStabilityDetector.ResetWasStable();
-        return ExecutionResult.Failure("No proceed button found");
+        await GodotMainThread.ClickAsync(result.Button);
+        Plugin.Log("Clicked proceed on rewards");
+        // GameStabilityDetector.ResetWasStable();
+        return ExecutionResult.Success("Proceeded");
     }
 
     private static List<NRewardButton> GetEnabledRewardButtons(NRewardsScreen screen)

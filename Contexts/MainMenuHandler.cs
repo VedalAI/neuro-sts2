@@ -18,8 +18,12 @@ using MegaCrit.Sts2.Core.Context;
 
 namespace Sts2Agent.Contexts;
 
-public class MainMenuHandler : IContextHandler
+public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
 {
+    public class Result : IContextResult
+    {
+
+    }
     public ContextType Type => ContextType.MainMenu;
 
     public string GetContext(ContextInfo ctx)
@@ -60,9 +64,8 @@ public class MainMenuHandler : IContextHandler
         return commands;
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
-        parsedData = new Dictionary<string, object>();
         var sceneRoot = SceneHelper.GetSceneRoot();
         var mainMenu = sceneRoot != null ? UiHelper.FindFirst<NMainMenu>(sceneRoot) : null;
         if (mainMenu == null) return ExecutionResult.Failure("Not in Main Menu can't call this action");
@@ -90,8 +93,9 @@ public class MainMenuHandler : IContextHandler
 
         return ExecutionResult.Failure("Unknown Action called in Main Menu");
     }
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement ParsedData, ContextInfo ctx)
+    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
     {
+        Plugin.LogDebug($"Action: {action},result {result}, contextinfo {ctx}");
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
             return ExecutionResult.Failure("Cannot access scene tree");
@@ -145,7 +149,7 @@ public class MainMenuHandler : IContextHandler
             }
 
             Plugin.Log("Abandoned saved run");
-            GameStabilityDetector.ResetWasStable();
+            // GameStabilityDetector.ResetWasStable();
             return ExecutionResult.Success("Abandoned saved run");
         }
 

@@ -39,4 +39,9 @@ public class ConstructedAction(string name, string description, JsonSchema? sche
     {
         return ActionExecutor.Validate(this, actionData, out parsedData);
     }
+
+    public override string ToString()
+    {
+        return $"[{Name}] {description}, Stays Active [{Persistant_action}], jsonSchema {Schema}";
+    }
 }

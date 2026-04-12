@@ -76,10 +76,10 @@ public static class ActionExecutor
             var handler = Handlers.FirstOrDefault(h => h.Type == ctx.Type);
             if (handler != null)
             {
-                var json_elements = JsonDocument.Parse(JsonSerializer.Serialize(ParsedData, NeuroIntegration.JsonOptions));
-                _ = (GodotMainThread.RunAsync(async () =>
+                GodotMainThread.RunAsync(async () =>
                 {
-                    var result = await handler?.Internal_TryExecute(action, json_elements?.RootElement ?? new(), ctx) ?? ExecutionResult.ModFailure("handler didn't return awaitable");
+                    GameStabilityDetector.ResetWasStable();
+                    var result = await handler?.Internal_TryExecute(action, ParsedData, ctx) ?? ExecutionResult.ModFailure("handler didn't return awaitable");
                     if (result.Successful)
                     {
                         Plugin.LogDebug("Action Successful with message: " + result.Message);
@@ -89,10 +89,7 @@ public static class ActionExecutor
                         Plugin.LogError($"[CRITICAL] Action has Errored during Execution with Message: {result.Message}, The Validation or Execution are wrong for handler of action: {action.Name}");
                     }
                     GameStabilityDetector.ScheduleStabilityCheck();
-                })
-                ?.ContinueWith(async (something) =>
-                {
-                }));
+                });
                 return;
             }
 

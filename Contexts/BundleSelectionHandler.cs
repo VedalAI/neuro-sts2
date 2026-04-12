@@ -19,9 +19,9 @@ using MegaCrit.Sts2.Core.Models.Cards;
 
 namespace Sts2Agent.Contexts;
 
-public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.BundleSelectionResult>
+public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Result>
 {
-    public class BundleSelectionResult
+    public class Result : IContextResult
     {
         public NCardBundle? SelectedBundle;
     }
@@ -69,7 +69,7 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Bun
         return commands;
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, ref BundleSelectionResult parsedData, ContextInfo ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
         var bundleIndex = data.Data?["bundleIndex"]?.GetValue<int>() ?? -1;
         if (bundleIndex < 0)
@@ -84,7 +84,7 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Bun
         parsedData.SelectedBundle = bundle;
         return ExecutionResult.Success();
     }
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, BundleSelectionResult result, ContextInfo ctx)
+    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
     {
         return action.Name switch
         {
@@ -93,7 +93,7 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Bun
         };
     }
 
-    private async Task<ExecutionResult> SelectBundle(BundleSelectionResult result, ContextInfo ctx)
+    private async Task<ExecutionResult> SelectBundle(Result result, ContextInfo ctx)
     {
         var overlayNode = ctx.OverlayNode;
         var overlayScreen = ctx.OverlayScreen;

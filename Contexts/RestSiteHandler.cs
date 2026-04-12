@@ -16,8 +16,13 @@ using System.Text;
 
 namespace Sts2Agent.Contexts;
 
-public class RestSiteHandler : IContextHandler
+public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
 {
+    public class Result : IContextResult
+    {
+        internal NRestSiteButton SelectedOption;
+        internal NProceedButton ProceedButton;
+    }
     public ContextType Type => ContextType.RestSite;
 
     public string GetContext(ContextInfo ctx)
@@ -47,46 +52,57 @@ public class RestSiteHandler : IContextHandler
         return commands;
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
-        //TODO: Proper Validation
-        parsedData = data.Data;
-        return ExecutionResult.Success();
+
+        if (action.Name.StartsWith("rest_option_"))
+        {
+            var option = action.Name.Replace("rest_option_", "");
+
+            var sceneRoot = SceneHelper.GetSceneRoot();
+            if (sceneRoot == null)
+                return ExecutionResult.Failure("Cannot access scene tree");
+
+            var buttons = UiHelper.FindAll<NRestSiteButton>(sceneRoot)
+                .Where(b => b.Option.IsEnabled)
+                .ToList();
+
+            if (buttons.Count == 0)
+                return ExecutionResult.Failure("No rest site options available");
+
+            var match = buttons.FirstOrDefault(b =>
+                b.Option.OptionId.Equals(option, StringComparison.OrdinalIgnoreCase));
+
+            if (match == null)
+            {
+                if (int.TryParse(option, out var idx) && idx >= 0 && idx < buttons.Count)
+                    match = buttons[idx];
+                else
+                    return ExecutionResult.Failure($"Rest option '{option}' not found. Available: {string.Join(", ", buttons.Select(b => b.Option.OptionId))}");
+            }
+            parsedData.SelectedOption = match;
+            Plugin.Log($"Selected rest option: {option}");
+            return ExecutionResult.Success();
+
+        }
+        else
+        {
+            var nRestSiteRoom = FindNRestSiteRoom();
+            if (nRestSiteRoom?.ProceedButton?.IsEnabled != true)
+                return ExecutionResult.Failure("Proceed button not available");
+            parsedData.ProceedButton = nRestSiteRoom.ProceedButton;
+            return ExecutionResult.Success();
+
+        }
     }
 
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
 
     {
-        if (action.Name == "proceed") return await Proceed();
-        if (action.Name.StartsWith("rest_option_")) return null;
+        if (action.Name == "proceed") return await Proceed(result);
 
-        var option = action.Name.Replace("rest_option_", "");
 
-        var sceneRoot = SceneHelper.GetSceneRoot();
-        if (sceneRoot == null)
-            return ExecutionResult.Failure("Cannot access scene tree");
-
-        var buttons = UiHelper.FindAll<NRestSiteButton>(sceneRoot)
-            .Where(b => b.Option.IsEnabled)
-            .ToList();
-
-        if (buttons.Count == 0)
-            return ExecutionResult.Failure("No rest site options available");
-
-        var match = buttons.FirstOrDefault(b =>
-            b.Option.OptionId.Equals(option, StringComparison.OrdinalIgnoreCase));
-
-        if (match == null)
-        {
-            if (int.TryParse(option, out var idx) && idx >= 0 && idx < buttons.Count)
-                match = buttons[idx];
-            else
-                return ExecutionResult.Failure($"Rest option '{option}' not found. Available: {string.Join(", ", buttons.Select(b => b.Option.OptionId))}");
-        }
-
-        await GodotMainThread.ClickAsync(match);
-        Plugin.Log($"Selected rest option: {option}");
-
+        await GodotMainThread.ClickAsync(result.SelectedOption);
         // Wait for the animation to finish: proceed button becomes enabled or an overlay appears
         // (e.g., Smith opens card selection). Mirrors the game's AutoSlay RestSiteRoomHandler logic.
         var nRoom = FindNRestSiteRoom();
@@ -105,17 +121,15 @@ public class RestSiteHandler : IContextHandler
                 if (ready) break;
             }
         }
+        // GameStabilityDetector.ResetWasStable();
 
         return ExecutionResult.Success("Rest option selected");
     }
 
-    private async Task<ExecutionResult> Proceed()
+    private async Task<ExecutionResult> Proceed(Result result)
     {
-        var nRestSiteRoom = FindNRestSiteRoom();
-        if (nRestSiteRoom?.ProceedButton?.IsEnabled != true)
-            return ExecutionResult.Failure("Proceed button not available");
 
-        await GodotMainThread.ClickAsync(nRestSiteRoom.ProceedButton);
+        await GodotMainThread.ClickAsync(result.ProceedButton);
         Plugin.Log("Clicked proceed (rest site)");
         return ExecutionResult.Success("Proceeded");
     }

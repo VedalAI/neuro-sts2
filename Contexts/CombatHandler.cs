@@ -19,11 +19,19 @@ using NeuroSdk.Json;
 using System.Text;
 using MegaCrit.Sts2.Core.Saves;
 using System.Collections.Immutable;
+using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Entities.Players;
 
 namespace Sts2Agent.Contexts;
 
-public class CombatHandler : IContextHandler
+public class CombatHandler : IContextHandler<CombatHandler.Result>
 {
+    public class Result : IContextResult
+    {
+        internal Creature? Target;
+        internal CardModel? Card;
+        internal PotionModel Potion;
+    }
     public ContextType Type => ContextType.Combat;
     bool firstContext = true;
 
@@ -225,57 +233,76 @@ public class CombatHandler : IContextHandler
     }
 
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
-    {
-        parsedData = data.Data;
-        if (action.Name == "play_enemy_target_card" || action.Name == "play_ally_target_card" || action.Name == "play_card")
-        {
-            var cm = CombatManager.Instance;
-            if (cm == null) return ExecutionResult.Failure("Not in combat");
-            if (cm.IsOverOrEnding) return ExecutionResult.Failure("Combat is ending");
-            if (!cm.IsPlayPhase) return ExecutionResult.Failure("Not in play phase");
-
-            var cardIndex = data.Data?["card"]?.GetValue<string>();
-            if (cardIndex == null)
-                return ExecutionResult.Failure("card field is missing");
-            if (ctx == null)
-                return ExecutionResult.ModFailure("Invalid Ctx");
-            if (ctx.RunState == null)
-                return ExecutionResult.ModFailure("Runstate is invalid currently");
-
-            var player = LocalContext.GetMe(ctx.RunState.Players);
-            var pcs = player?.PlayerCombatState;
-            if (pcs == null) return ExecutionResult.Failure("No player combat state");
-
-            var hand = pcs.Hand.Cards;
-            if (hand == null || hand.Count <= 0)
-                return ExecutionResult.Failure($"Hand isn't valid");
-            var card = hand.FirstOrDefault((x) => x?.Title == cardIndex);
-            if (card == null || !card.CanPlay())
-                return ExecutionResult.Failure($"Card '{cardIndex}' cannot be played");
-        }
-        return ExecutionResult.Success();
-    }
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
-    {
-        firstContext = false;
-        return action.Name switch
-        {
-            "play_enemy_target_card" or "play_ally_target_card" or "play_card" => await PlayCard(root, ctx),
-            "end_turn" => EndTurn(ctx),
-            "use_potion" or "use_target_potion" => UsePotion(root, ctx),
-            _ => null
-        };
-    }
-
-    private async Task<ExecutionResult> PlayCard(JsonElement root, ContextInfo ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
         var cm = CombatManager.Instance;
         if (cm == null) return ExecutionResult.Failure("Not in combat");
         if (cm.IsOverOrEnding) return ExecutionResult.Failure("Combat is ending");
-        if (!cm.IsPlayPhase) return ExecutionResult.Failure("Not in play phase");
+        if (!cm.IsPlayPhase || !cm.IsInProgress) return ExecutionResult.ModFailure("Not in play phase");
+        var player = LocalContext.GetMe(ctx.RunState.Players);
+        if (player == null) return ExecutionResult.ModFailure("Player not found");
 
-        var cardIndex = root.GetProperty("card").GetString();
+        if (action.Name == "play_enemy_target_card" || action.Name == "play_ally_target_card" || action.Name == "play_card")
+        {
+            return ValidateSingleCard(data, ref parsedData, ctx);
+        }
+        else if (action.Name == "use_potion" || action.Name == "use_target_potion")
+        {
+            return ValidatePotion(data, ref parsedData, ctx);
+        }
+        else if (action.Name == "end_turn")
+        {
+            if (cm.IsPlayerReadyToEndTurn(player))
+                return ExecutionResult.Failure("Turn already ended");
+        }
+        return ExecutionResult.Success();
+    }
+    public ExecutionResult ValidatePotion(ActionJData data, ref Result parsedData, ContextInfo ctx)
+    {
+        var slot = data.Data?["potion"]?.GetValue<string>();
+        if (slot == null)
+            return ExecutionResult.Failure("No potion specified");
+        var player = LocalContext.GetMe(ctx.RunState.Players);
+        var potions = player.PotionSlots;
+        var potion = potions.FirstOrDefault((p) => TextHelper.SafeLocString(() => p.Title) == slot);
+        if (potion == null)
+            return ExecutionResult.Failure($"No potion named {slot}");
+
+        parsedData.Potion = potion;
+
+        // Resolve target based on potion's target type
+        Creature? target = null;
+        var targetType = potion.TargetType;
+        if (targetType == TargetType.AnyEnemy || targetType == TargetType.TargetedNoCreature)
+        {
+            var combatState = ctx.CombatState;
+            if (combatState != null)
+            {
+                var aliveEnemies = combatState.HittableEnemies.ToList();
+                if (data.Data?["target"]?.GetValue<string>() is string targetIndex)
+                {
+                    target = aliveEnemies.GetUniqueCreature(targetIndex!);
+                }
+                else
+                {
+                    target = aliveEnemies.FirstOrDefault();
+                }
+                if (target == null)
+                    return ExecutionResult.Failure("No valid target for potion");
+            }
+        }
+        else
+        {
+            // Self-targeting potions: game UI passes Owner.Creature
+            target = player.Creature;
+        }
+        parsedData.Target = target;
+        return ExecutionResult.Success();
+    }
+    public ExecutionResult ValidateSingleCard(ActionJData data, ref Result parsedData, ContextInfo ctx)
+    {
+
+        var cardIndex = data.Data?["card"]?.GetValue<string>();
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var pcs = player?.PlayerCombatState;
         if (pcs == null) return ExecutionResult.Failure("No player combat state");
@@ -293,14 +320,15 @@ public class CombatHandler : IContextHandler
             return ExecutionResult.Failure("card's Combat state is null");
         }
 
+        parsedData.Card = card;
+
         var aliveEnemies = combatState.HittableEnemies.ToList();
 
         Creature? target = null;
         if (card!.TargetType == TargetType.AnyEnemy)
         {
-            if (root.TryGetProperty("target", out var targetProp))
+            if (data.Data?["target"]?.GetValue<string>() is string targetIndex)
             {
-                var targetIndex = targetProp.GetString();
                 Plugin.LogDebug($"target: {targetIndex}");
                 target = aliveEnemies.GetUniqueCreature(targetIndex!);
                 var unique = aliveEnemies.CreaturesAreDistinct();
@@ -322,17 +350,34 @@ public class CombatHandler : IContextHandler
         else if (card.TargetType == TargetType.AnyAlly)
         {
             var allies = combatState.Allies.Where(c => c != null && c.IsAlive && c.IsPlayer && c != card.Owner.Creature);
-            target = root.TryGetProperty("target", out var tp)
-                ? allies.FirstOrDefault((a) => a.Name == tp.GetString())
+            target = data.Data?["target"]?.GetValue<string>() is string tp
+                ? allies.FirstOrDefault((a) => a.Name == tp)
                 : allies.FirstOrDefault();
         }
+        parsedData.Target = target;
 
+        return ExecutionResult.Success();
+
+    }
+    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
+    {
+        firstContext = false;
+        return action.Name switch
+        {
+            "play_enemy_target_card" or "play_ally_target_card" or "play_card" => await PlayCard(result, ctx),
+            "end_turn" => EndTurn(ctx),
+            "use_potion" or "use_target_potion" => UsePotion(result, ctx),
+            _ => null
+        };
+    }
+
+    private async Task<ExecutionResult> PlayCard(Result root, ContextInfo ctx)
+    {
         try
         {
-
-            var played = card.TryManualPlay(target);
+            var played = root.Card.TryManualPlay(root.Target);
             if (!played)
-                return ExecutionResult.Failure($"Card '{card.Title}' play was rejected by the game");
+                return ExecutionResult.Failure($"Card '{root.Card.Title}' play was rejected by the game");
 
         }
         catch (Exception e)
@@ -340,20 +385,14 @@ public class CombatHandler : IContextHandler
             Plugin.LogDebug(e.Message);
             return ExecutionResult.Failure("Playing the card threw");
         }
-        Plugin.Log($"Played card '{card.Title}'" + (target != null ? " targeting enemy" : ""));
+        Plugin.Log($"Played card '{root.Card.Title}'" + (root.Target != null ? " targeting enemy" : ""));
         return ExecutionResult.Success("Card played");
     }
 
     private ExecutionResult EndTurn(ContextInfo ctx)
     {
         var cm = CombatManager.Instance;
-        if (cm == null) return ExecutionResult.Failure("Not in combat");
-        if (!cm.IsPlayPhase || !cm.IsInProgress) return ExecutionResult.Failure("Not in play phase");
-
         var player = LocalContext.GetMe(ctx.RunState.Players);
-        if (cm.IsPlayerReadyToEndTurn(player))
-            return ExecutionResult.Failure("Turn already ended");
-
         var roundNumber = player.Creature.CombatState.RoundNumber;
         Callable.From(() =>
         {
@@ -366,47 +405,11 @@ public class CombatHandler : IContextHandler
         return ExecutionResult.Success("Turn ended");
     }
 
-    private ExecutionResult UsePotion(JsonElement root, ContextInfo ctx)
+    private ExecutionResult UsePotion(Result root, ContextInfo ctx)
     {
-        var slot = root.GetProperty("potion").GetString();
-        var player = LocalContext.GetMe(ctx.RunState.Players);
 
-        var potions = player.PotionSlots;
-
-        var potion = potions.FirstOrDefault((p) => TextHelper.SafeLocString(() => p.Title) == slot);
-        if (potion == null)
-            return ExecutionResult.Failure($"No potion in slot {slot}");
-
-        // Resolve target based on potion's target type
-        Creature? target = null;
-        var targetType = potion.TargetType;
-        if (targetType == TargetType.AnyEnemy || targetType == TargetType.TargetedNoCreature)
-        {
-            var combatState = ctx.CombatState;
-            if (combatState != null)
-            {
-                var aliveEnemies = combatState.HittableEnemies.ToList();
-                if (root.TryGetProperty("target", out var targetProp))
-                {
-                    var targetIndex = targetProp.GetString();
-                    target = aliveEnemies.GetUniqueCreature(targetIndex!);
-                }
-                else
-                {
-                    target = aliveEnemies.FirstOrDefault();
-                }
-                if (target == null)
-                    return ExecutionResult.Failure("No valid target for potion");
-            }
-        }
-        else
-        {
-            // Self-targeting potions: game UI passes Owner.Creature
-            target = player.Creature;
-        }
-
-        Callable.From(() => potion.EnqueueManualUse(target)).CallDeferred();
-        Plugin.Log($"Used potion in slot {slot}");
+        Callable.From(() => root.Potion.EnqueueManualUse(root.Target)).CallDeferred();
+        Plugin.Log($"Used potion {root.Potion.Title}");
         return ExecutionResult.Success("Potion used");
     }
 

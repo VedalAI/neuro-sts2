@@ -17,8 +17,9 @@ using System.Text;
 
 namespace Sts2Agent.Contexts;
 
-public class GameOverHandler : IContextHandler
+public class GameOverHandler : IContextHandler<GameOverHandler.GameOverResult>
 {
+    public class GameOverResult { }
     public ContextType Type => ContextType.GameOver;
 
     private enum Phase { Continue, MainMenu }
@@ -161,14 +162,11 @@ public class GameOverHandler : IContextHandler
     }
 
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, GameOverResult result, ContextInfo ctx)
     {
-        //TODO: Proper Validation
-        parsedData = data.Data;
         return ExecutionResult.Success();
     }
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
-
+    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, GameOverResult result, ContextInfo ctx)
     {
         if (action.Name == "continue")
             return await AdvanceGameOver();

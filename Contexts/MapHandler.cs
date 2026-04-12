@@ -17,8 +17,12 @@ using MegaCrit.Sts2.Core.Models.Cards;
 
 namespace Sts2Agent.Contexts;
 
-public class MapHandler : IContextHandler
+public class MapHandler : IContextHandler<MapHandler.Result>
 {
+    public class Result : IContextResult
+    {
+        public NMapPoint Target;
+    }
     public ContextType Type => ContextType.Map;
 
     //TODO: Figure out how to best represent the paths. Like giving context where a choice can lead, i.e. shop or rest site
@@ -50,14 +54,16 @@ public class MapHandler : IContextHandler
     }
 
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
-        parsedData = data.Data;
-        if (data.Data?["coord"]?.GetValue<string>() == null)
+        if (action.Name != "select_map_node") return ExecutionResult.ModFailure("Unknown Action called in Map");
+        var sceneRoot = SceneHelper.GetSceneRoot();
+        if (sceneRoot == null)
+            return ExecutionResult.Failure("Cannot access scene tree");
+        if (data.Data?["coord"]?.GetValue<string>() is not string index)
         {
             return ExecutionResult.Failure("missing parameter \"coord\"");
         }
-        var index = data.Data["coord"]!.GetValue<string>();
         var coord = index.Split(",");
         if (coord.Length <= 0 || coord.Length > 2)
         {
@@ -70,6 +76,14 @@ public class MapHandler : IContextHandler
             {
                 return ExecutionResult.Failure("Couldn't find specified node");
             }
+            var mapPointNodes = UiHelper.FindAll<NMapPoint>(sceneRoot);
+            var targetNode = mapPointNodes.FirstOrDefault(mp =>
+                mp.Point.coord.row == target.coord.row && mp.Point.coord.col == target.coord.col);
+
+            if (targetNode == null)
+                return ExecutionResult.Failure($"Map node UI element not found for ({target.coord.row}, {target.coord.col})");
+            Plugin.Log($"Selected map node {index} ({target.coord.row}, {target.coord.col})");
+            parsedData.Target = targetNode;
 
         }
         catch (Exception e)
@@ -78,33 +92,9 @@ public class MapHandler : IContextHandler
         }
         return ExecutionResult.Success();
     }
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
-
+    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
     {
-        if (action.Name != "select_map_node") return null;
-
-        var index = root.GetProperty("coord").GetString();
-        var coord = index.Split(",");
-        var nodes = ctx.AvailableMapNodes;
-
-        var target = nodes.Find((x) => x.coord.row == int.Parse(coord[0]) && x.coord.col == int.Parse(coord[1]));
-        if (target == null)
-        {
-            return ExecutionResult.Failure("Couldn't find specified node");
-        }
-        var sceneRoot = SceneHelper.GetSceneRoot();
-        if (sceneRoot == null)
-            return ExecutionResult.Failure("Cannot access scene tree");
-
-        var mapPointNodes = UiHelper.FindAll<NMapPoint>(sceneRoot);
-        var targetNode = mapPointNodes.FirstOrDefault(mp =>
-            mp.Point.coord.row == target.coord.row && mp.Point.coord.col == target.coord.col);
-
-        if (targetNode == null)
-            return ExecutionResult.Failure($"Map node UI element not found for ({target.coord.row}, {target.coord.col})");
-
-        await GodotMainThread.ClickAsync(targetNode);
-
+        await GodotMainThread.ClickAsync(result.Target);
         // Wait for travel to start (IsTravelEnabled becomes false) or map to close
         for (int i = 0; i < 100; i++)
         {
@@ -113,8 +103,6 @@ public class MapHandler : IContextHandler
             if (ms == null || !ms.IsOpen || !ms.IsTravelEnabled)
                 break;
         }
-
-        Plugin.Log($"Selected map node {index} ({target.coord.row}, {target.coord.col})");
         return ExecutionResult.Success("Map node selected");
     }
 

@@ -15,8 +15,12 @@ using NeuroSdk.Actions;
 
 namespace Sts2Agent.Contexts;
 
-public class ShopHandler : IContextHandler
+public class ShopHandler : IContextHandler<ShopHandler.Result>
 {
+    public class Result : IContextResult
+    {
+
+    }
     public ContextType Type => ContextType.Shop;
 
     public Dictionary<string, object>? SerializeState(ContextInfo ctx)
@@ -75,9 +79,8 @@ public class ShopHandler : IContextHandler
         return commands;
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
-        parsedData = data.Data;
         return ExecutionResult.Success();
     }
 
@@ -86,13 +89,13 @@ public class ShopHandler : IContextHandler
         return "You are at a Shop";
     }
 
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
 
     {
         return action.Name switch
         {
             "shop_open" => await ShopOpen(),
-            "shop_buy" => await ShopBuy(root, ctx),
+            "shop_buy" => await ShopBuy(result, ctx),
             "shop_leave" => await ShopLeave(),
             _ => null
         };
@@ -115,9 +118,9 @@ public class ShopHandler : IContextHandler
         return ExecutionResult.Success("Shop opened");
     }
 
-    private async Task<ExecutionResult> ShopBuy(JsonElement root, ContextInfo ctx)
+    private async Task<ExecutionResult> ShopBuy(Result root, ContextInfo ctx)
     {
-        var itemIndex = root.GetProperty("itemIndex").GetInt32();
+        var itemIndex = 0;//TODO: root.GetProperty("itemIndex").GetInt32();
         var items = ctx.ShopItems;
         var inv = ctx.ShopInventory;
 

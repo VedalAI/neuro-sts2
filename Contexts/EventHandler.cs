@@ -19,8 +19,12 @@ using System.Text;
 
 namespace Sts2Agent.Contexts;
 
-public class EventContextHandler : IContextHandler
+public class EventContextHandler : IContextHandler<EventContextHandler.Result>
 {
+    public class Result
+    {
+        internal NButton? Button;
+    }
     public ContextType Type => ContextType.Event;
 
     //TODO: make this more robust. Context is a bit odd in some events
@@ -170,9 +174,8 @@ public class EventContextHandler : IContextHandler
         return commands;
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
-        parsedData = data.Data;
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
             return ExecutionResult.ModFailure("Cannot access scene tree");
@@ -181,16 +184,21 @@ public class EventContextHandler : IContextHandler
         {
             // Try proceed button
             var proceedButton = UiHelper.FindFirst<NProceedButton>(sceneRoot);
-            if (proceedButton != null)
+            if (proceedButton != null && proceedButton.IsVisibleInTree())
             {
+                parsedData.Button = proceedButton;
+                Plugin.LogDebug("Initial Proceed button");
+
                 return ExecutionResult.Success();
             }
 
             // Finished events use NEventOptionButton with IsProceed=true
             var eventProceed = UiHelper.FindAll<NEventOptionButton>(sceneRoot)
-                .FirstOrDefault(b => b.Option.IsProceed);
+                .FirstOrDefault(b => b.Option.IsProceed && b.IsVisibleInTree());
             if (eventProceed != null)
             {
+                parsedData.Button = eventProceed;
+                Plugin.LogDebug("After proceed button");
                 return ExecutionResult.Success();
             }
 
@@ -214,73 +222,36 @@ public class EventContextHandler : IContextHandler
         {
             return ExecutionResult.Failure($"Event option index {optionName} is Locked");
         }
+        parsedData.Button = button;
 
         return ExecutionResult.Success();
     }
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
+    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
 
     {
         return action.Name switch
         {
-            "select_event_option" => await SelectEventOption(root, ctx),
-            "proceed" => await Proceed(),
+            "select_event_option" => await SelectEventOption(result, ctx),
+            "proceed" => await Proceed(result),
             _ => null
         };
     }
 
-    private async Task<ExecutionResult> SelectEventOption(JsonElement root, ContextInfo ctx)
+    private async Task<ExecutionResult> SelectEventOption(Result result, ContextInfo ctx)
     {
-        var optionName = root.GetProperty("option").GetString();
 
-        var sceneRoot = SceneHelper.GetSceneRoot();
-        if (sceneRoot == null)
-            return ExecutionResult.Failure("Cannot access scene tree");
-
-        var allButtons = UiHelper.FindAll<NEventOptionButton>(sceneRoot);
-
-        // Buttons are added to the container in CurrentOptions order,
-        // so tree-order index matches the event option index
-        var button = allButtons.Find((btn) => btn.Option.Title.GetUnformatedText() == optionName);
-
-        if (button == null || button.Option.IsLocked)
-        {
-            Plugin.LogDebug($"Event button lookup: requested={optionName}, found={allButtons.Count} buttons");
-            return ExecutionResult.Failure($"Event option index {optionName} not found or locked");
-        }
-
-        GameStabilityDetector.ResetWasStable();
-
-        await GodotMainThread.ClickAsync(button);
-        Plugin.Log($"Selected event option {optionName}");
+        // GameStabilityDetector.ResetWasStable();
+        await GodotMainThread.ClickAsync(result.Button);
+        Plugin.Log($"Selected event option {result.Button.Name}");
         return ExecutionResult.Success("Event option selected");
     }
 
-    private async Task<ExecutionResult> Proceed()
+    private async Task<ExecutionResult> Proceed(Result result)
     {
-        var sceneRoot = SceneHelper.GetSceneRoot();
-        if (sceneRoot == null)
-            return ExecutionResult.Failure("Cannot access scene tree");
+        await GodotMainThread.ClickAsync(result.Button);
+        Plugin.Log("Clicked event proceed");
+        return ExecutionResult.Success("Proceeded");
 
-        // Try proceed button
-        var proceedButton = UiHelper.FindFirst<NProceedButton>(sceneRoot);
-        if (proceedButton != null)
-        {
-            await GodotMainThread.ClickAsync(proceedButton);
-            Plugin.Log("Clicked proceed");
-            return ExecutionResult.Success("Proceeded");
-        }
-
-        // Finished events use NEventOptionButton with IsProceed=true
-        var eventProceed = UiHelper.FindAll<NEventOptionButton>(sceneRoot)
-            .FirstOrDefault(b => b.Option.IsProceed);
-        if (eventProceed != null)
-        {
-            await GodotMainThread.ClickAsync(eventProceed);
-            Plugin.Log("Clicked event proceed");
-            return ExecutionResult.Success("Proceeded");
-        }
-
-        return ExecutionResult.Failure("No proceed button found");
     }
 
     /// <summary>

@@ -114,7 +114,7 @@ public class NeuroIntegration : Node
       {
         Plugin.LogError("Couldn't resolve current Context");
         GameStabilityDetector.ResetWasStable();
-        GameStabilityDetector.ScheduleStabilityCheck();
+        GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
         return;
       }
       var window = ActionWindow.Create(this).SetContext(handler.GetContext(ctx));

@@ -10,11 +10,16 @@ using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 using System.Text;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
 
 namespace Sts2Agent.Contexts;
 
-public class TreasureHandler : IContextHandler
+public class TreasureHandler : IContextHandler<TreasureHandler.Result>
 {
+    public class Result : IContextResult
+    {
+        public NProceedButton ProceedButton;
+    }
     public ContextType Type => ContextType.Treasure;
 
     public string GetContext(ContextInfo ctx)
@@ -45,22 +50,7 @@ public class TreasureHandler : IContextHandler
     }
 
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData, ContextInfo? ctx)
-    {
-        //TODO: Proper Validation
-        parsedData = data.Data;
-        return ExecutionResult.Success();
-    }
-
-    public async Task<ExecutionResult?>? TryExecute(ConstructedAction action, JsonElement root, ContextInfo ctx)
-
-    {
-        if (action.Name == "proceed")
-            return await Proceed();
-        return null;
-    }
-
-    private async Task<ExecutionResult> Proceed()
+    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
         var room = TreasureRoomAutoPatch.CurrentRoom;
         if (room == null || !GodotObject.IsInstanceValid(room))
@@ -69,8 +59,22 @@ public class TreasureHandler : IContextHandler
         var button = room.ProceedButton;
         if (button == null || !button.IsEnabled)
             return ExecutionResult.Failure("Proceed button not available");
+        parsedData.ProceedButton = button;
+        return ExecutionResult.Success();
+    }
 
-        await GodotMainThread.ClickAsync(button);
+    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
+
+    {
+        if (action.Name == "proceed")
+            return await Proceed(result);
+        return null;
+    }
+
+    private async Task<ExecutionResult> Proceed(Result result)
+    {
+
+        await GodotMainThread.ClickAsync(result.ProceedButton);
         Plugin.Log("Clicked proceed on treasure room");
         return ExecutionResult.Success("Proceeded from treasure room");
     }
