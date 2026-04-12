@@ -137,7 +137,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
         {
 
             var all_nodes = new List<NCardHolder>();
-            var cardIndex = data.Data?["cards"]?.GetValue<string[]>();
+            var cardIndex = data.Data?["cards"]?.AsArray().GetValues<string>();
             if (cardIndex == null)
             {
                 return ExecutionResult.Failure("Missing Parameter cards");
