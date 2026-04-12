@@ -64,7 +64,7 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
                 return ExecutionResult.Failure("Cannot access scene tree");
 
             var buttons = UiHelper.FindAll<NRestSiteButton>(sceneRoot)
-                .Where(b => b.Option.IsEnabled)
+                .Where(b => b.Option.IsEnabled && b.IsVisibleInTree())
                 .ToList();
 
             if (buttons.Count == 0)
@@ -100,6 +100,7 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
 
     {
         if (action.Name == "proceed") return await Proceed(result);
+        if (result.SelectedOption == null || !result.SelectedOption.IsVisibleInTree()) return ExecutionResult.ModFailure("Selected Option is invalid");
 
 
         await GodotMainThread.ClickAsync(result.SelectedOption);

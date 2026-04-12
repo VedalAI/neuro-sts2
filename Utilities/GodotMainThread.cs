@@ -44,6 +44,8 @@ public static class GodotMainThread
 
     public static async Task ClickAsync(NClickableControl button, int delayMs = 300)
     {
+        if (button == null || !button.IsVisibleInTree())
+            return;
         await RunAsync(() => button.ForceClick());
         if (delayMs > 0) await Task.Delay(delayMs);
     }
