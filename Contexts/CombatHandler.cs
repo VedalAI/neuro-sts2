@@ -113,7 +113,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         }
         stringBuilder.AppendLine();
         stringBuilder.AppendLine($"You currently have {pcs?.Hand.Cards.Count} Cards in hand");
-        stringBuilder.RepresentDeck(pcs.Hand.Cards);
+        stringBuilder.RepresentDeck(pcs.Hand.Cards); //TODO: add a more complete description that also include the other KeyWords, Look at CardModel -> GetDescriptionForPile Function for inspiration
         var events = EventLog.DrainAll();
         if (events.Count > 0)
         {
