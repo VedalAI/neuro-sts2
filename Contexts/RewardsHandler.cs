@@ -20,6 +20,7 @@ using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 
 namespace Sts2Agent.Contexts;
 
+//TODO:Handle potions if potionslots are full. pehaps allow usage or discarding if slots are full
 public class RewardsHandler : IContextHandler<RewardsHandler.Result>
 {
     public class Result : IContextResult

@@ -19,6 +19,7 @@ using System.Text;
 
 namespace Sts2Agent.Contexts;
 
+//TODO: Handle Divination Minigame. the thing with tiles that you have to click randomly on to unlock things in.
 public class EventContextHandler : IContextHandler<EventContextHandler.Result>
 {
     public class Result

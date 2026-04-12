@@ -24,6 +24,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 
 namespace Sts2Agent.Contexts;
 
+// TODO: Figure out why "Fishy oil" potion crashed my game with segmentation fault on use
 public class CombatHandler : IContextHandler<CombatHandler.Result>
 {
     public class Result : IContextResult
