@@ -202,7 +202,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
                 return ExecutionResult.Success();
             }
 
-            return ExecutionResult.ModFailure("Couldn't find a Proceed button. You are mostlikely stuck here...");
+            return ExecutionResult.Unstable("Couldn't find a Proceed button. You are mostlikely stuck here...");
         }
         var optionName = data?.Data?["option"]?.GetValue<string>() ?? ""; //TODO: Figure out if this is good enough.
 
@@ -216,7 +216,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
         if (button == null)
         {
             Plugin.LogDebug($"Event button lookup: requested={optionName}, found={allButtons.Count} buttons");
-            return ExecutionResult.Failure($"Event option index {optionName} not found");
+            return ExecutionResult.Unstable($"Event option index {optionName} not found");
         }
         if (button.Option.IsLocked)
         {
