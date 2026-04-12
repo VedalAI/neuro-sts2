@@ -72,7 +72,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>
         if (rewardsScreen == null) return commands;
 
         var buttons = GetEnabledRewardButtons(rewardsScreen);
-        if (buttons.Count <= 0)
+        if (buttons.Count > 0)
         {
             commands.Add(new("select_reward", "Select a reward", QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
@@ -87,7 +87,10 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>
 
         var proceedButton = UiHelper.FindFirst<NProceedButton>((Node)rewardsScreen);
         if (proceedButton?.IsEnabled == true)
-            commands.Add(new("proceed", "Proceed, This skips any unclaimed rewards! be sure to collect them all if they are interesting"));
+            if (buttons.Count > 0)
+                commands.Add(new("skip_rewards", "This skips any unclaimed rewards! be sure to collect them all if they are interesting"));
+            else
+                commands.Add(new("proceed", "Proceed out of the Rewards room"));
 
         return commands;
     }
@@ -123,7 +126,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>
         return action.Name switch
         {
             "select_reward" => await SelectReward(result),
-            "proceed" => await Proceed(result),
+            "proceed" or "skip_rewards" => await Proceed(result),
             _ => null
         };
     }
