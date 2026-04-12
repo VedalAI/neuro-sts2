@@ -199,6 +199,7 @@ public static class GameStabilityDetector
                     return false;
                 }
 
+            case ContextType.BundleSelection:
             case ContextType.CardSelection:
             case ContextType.Rewards:
                 Plugin.LogDebug($"IsStable: overlay {ctx.Type} → true");
@@ -221,8 +222,8 @@ public static class GameStabilityDetector
 
             case ContextType.Event:
                 {
-                    var evt = ctx.EventRoom!.LocalMutableEvent;
-                    if (evt is AncientEventModel && EventContextHandler.TryAdvanceAncientDialogue())
+                    var evt = ctx.EventRoom?.LocalMutableEvent;
+                    if ((evt is AncientEventModel && EventContextHandler.TryAdvanceAncientDialogue()) || evt == null)
                         return false;
                     var evtResult = evt != null && (evt.CurrentOptions.Count > 0 || evt.IsFinished);
                     Plugin.LogDebug($"IsStable: event → hasEvent={evt != null}, options={evt?.CurrentOptions.Count ?? 0}, finished={evt?.IsFinished} → {evtResult}");

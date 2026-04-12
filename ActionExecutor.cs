@@ -76,10 +76,23 @@ public static class ActionExecutor
             var handler = Handlers.FirstOrDefault(h => h.Type == ctx.Type);
             if (handler != null)
             {
-                GodotMainThread.RunAsync(async () =>
+                _ = GodotMainThread.RunAsync(async () =>
                 {
                     GameStabilityDetector.ResetWasStable();
-                    var result = await handler?.Internal_TryExecute(action, ParsedData, ctx) ?? ExecutionResult.ModFailure("handler didn't return awaitable");
+                    var task = handler?.Internal_TryExecute(action, ParsedData, ctx);
+                    if (task == null)
+                    {
+                        Plugin.LogWarning($"[CRITICAL] Action Returned not awaitable task");
+                        GameStabilityDetector.ScheduleStabilityCheck();
+                        return;
+                    }
+                    var result = await task;
+                    if (result == null)
+                    {
+                        GameStabilityDetector.ScheduleStabilityCheck();
+                        return;
+                    }
+
                     if (result.Successful)
                     {
                         Plugin.LogDebug("Action Successful with message: " + result.Message);
@@ -98,6 +111,7 @@ public static class ActionExecutor
         catch (Exception e)
         {
             Plugin.LogError($"Action execution error: {e}");
+            GameStabilityDetector.ScheduleStabilityCheck();
         }
 
     }

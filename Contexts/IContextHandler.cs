@@ -25,7 +25,6 @@ public interface IContextHandler<T> : IContextHandler where T : class, new()
         Plugin.LogDebug("Validating " + action.Name);
         var passedT = new T();
         var executionResult = Validate(action, data, passedT, ctx);
-        Plugin.LogDebug(executionResult.Message ?? "No message Invalid");
         parsedData = passedT;
         return executionResult;
     }
