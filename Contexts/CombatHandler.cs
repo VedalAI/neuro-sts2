@@ -395,9 +395,9 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         if (hand == null || hand.Count <= 0)
             return ExecutionResult.Failure($"Hand isn't valid");
 #if !ALTERNATIVE_ACTIONS
-        var card = hand.FirstOrDefault((x) => x.Title == cardIndex);
+        var card = hand.FirstOrDefault((x) => x.Title == cardIndex && x.CanPlay());
 #else
-        var card = hand.FirstOrDefault((x) => TextHelper.GetActionNameFor(x.Title) == cardIndex);
+        var card = hand.FirstOrDefault((x) => TextHelper.GetActionNameFor(x.Title) == cardIndex && x.CanPlay());
 #endif
         if (card == null || !card.CanPlay())
             return ExecutionResult.Failure($"Card '{cardIndex}' cannot be played");
