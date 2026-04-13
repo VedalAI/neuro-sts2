@@ -39,7 +39,7 @@ public static class Plugin
             Godot.Bridge.ScriptManagerBridge.LookupScriptsInAssembly(Assembly.GetExecutingAssembly());
 
             GameStabilityDetector.Initialize();
-            GameStabilityDetector.OnBecameStable += () => STS2NeuroIntegration.NeuroIntegration.SignalDecisionPoint();
+            GameStabilityDetector.OnBecameStable += STS2NeuroIntegration.NeuroIntegration.SignalDecisionPoint;
 
             RunManager.Instance.RoomEntered += OnRoomEntered;
 

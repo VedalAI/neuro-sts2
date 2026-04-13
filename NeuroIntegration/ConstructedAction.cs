@@ -28,7 +28,9 @@ public class ConstructedAction(string name, string description, JsonSchema? sche
 
     protected override string Description => description!;
 
-    protected override JsonSchema? Schema => schema;
+    private JsonSchema? _schema = schema;
+
+    protected override JsonSchema? Schema => _schema;
 
     protected override void ExecuteUnsafe(object? parsedData)
     {
@@ -39,6 +41,8 @@ public class ConstructedAction(string name, string description, JsonSchema? sche
     {
         return ActionExecutor.Validate(this, actionData, out parsedData);
     }
+
+    public void SetSchema(JsonSchema Schema) => _schema = Schema;
 
     public override string ToString()
     {

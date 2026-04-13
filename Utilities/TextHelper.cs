@@ -1,10 +1,12 @@
 using System;
+using System.Text;
 using System.Text.RegularExpressions;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Cards;
+using MegaCrit.Sts2.GameInfo.Objects;
 
 namespace Sts2Agent.Utilities;
 
@@ -25,6 +27,24 @@ public static class TextHelper
     public static string GetUnformatedText(this LocString locString)
     {
         return StripBBCode(locString.GetFormattedText());
+    }
+
+    public static string GetActionNameFor(string Title)
+    {
+        return Title.ToLowerInvariant().Replace(' ', '_');
+    }
+    public static string GetActionName(this LocString locString)
+    {
+        return GetActionNameFor(SafeLocString(() => locString));
+    }
+
+    public static string AsSingleLine(this LocString locString)
+    {
+        return SafeLocString(() => locString).Replace('\n', ' ');
+    }
+    public static string AsSingleLine(this string desc)
+    {
+        return desc.Replace('\n', ' ');
     }
 
     public static string SafeLocString(Func<object> getter)
@@ -54,6 +74,10 @@ public static class TextHelper
         }
     }
 
+    public static string GetCardDescriptionFor(CardModel card, PileType pile)
+    {
+        return StripBBCode(card.GetDescriptionForPile(pile));
+    }
     public static string GetCardDescription(CardModel card)
     {
         try
@@ -62,7 +86,12 @@ public static class TextHelper
             card.DynamicVars.AddTo(desc);
             desc.Add("OnTable", true);
             desc.Add("InCombat", CombatManager.Instance?.IsInProgress ?? false);
-            return StripBBCode(desc.GetFormattedText());
+            StringBuilder sb = new();
+            foreach (var keyword in card.Keywords)
+            {
+                sb.Append(Enum.GetName(keyword) + ". ");
+            }
+            return StripBBCode(desc.GetFormattedText()) + sb.ToString();
         }
         catch
         {
