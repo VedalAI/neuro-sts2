@@ -116,7 +116,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         }
         stringBuilder.AppendLine();
         stringBuilder.AppendLine($"You currently have {pcs?.Hand.Cards.Count} Cards in hand");
-        stringBuilder.RepresentDeck(pcs.Hand.Cards, PileType.Hand); //TODO: add a more complete description that also include the other KeyWords, Look at CardModel -> GetDescriptionForPile Function for inspiration
+        stringBuilder.RepresentDeck(pcs.Hand.Cards, PileType.Hand);
         var events = EventLog.DrainAll();
         if (events.Count > 0)
         {
@@ -358,7 +358,6 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
                 var aliveEnemies = combatState.HittableEnemies.ToList();
                 if (data.Data?["target"]?.GetValue<string>() is string targetIndex)
                 {
-                    Plugin.LogDebug("found target");
                     target = aliveEnemies.GetUniqueCreature(targetIndex!);
                 }
                 else
@@ -366,7 +365,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
                     target = aliveEnemies.FirstOrDefault();
                 }
                 if (target == null)
-                    return ExecutionResult.Failure("No valid target for potion");
+                    return ExecutionResult.Unstable("No valid target for potion");
             }
         }
         else
@@ -397,7 +396,8 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
 #if !ALTERNATIVE_ACTIONS
         var card = hand.FirstOrDefault((x) => x.Title == cardIndex && x.CanPlay());
 #else
-        var card = hand.FirstOrDefault((x) => TextHelper.GetActionNameFor(x.Title) == cardIndex && x.CanPlay());
+        // select the card that is the cheapest and if it can be played and is named correctly
+        var card = hand.OrderBy(x => x.EnergyCost.GetAmountToSpend() + x.CurrentStarCost).FirstOrDefault((x) => TextHelper.GetActionNameFor(x.Title) == cardIndex && x.CanPlay());
 #endif
         if (card == null || !card.CanPlay())
             return ExecutionResult.Failure($"Card '{cardIndex}' cannot be played");
@@ -424,7 +424,6 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
                 {
                     Creature? targets = aliveEnemies[i];
                     Plugin.LogDebug($"all_enemies: {targets.GetUniqueName(unique, i)}");
-
                 }
                 Plugin.LogDebug($"found target: {target}");
             }
@@ -433,7 +432,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
                 target = aliveEnemies.FirstOrDefault();
             }
             if (target == null)
-                return ExecutionResult.Failure("No valid target available");
+                return ExecutionResult.Unstable("No valid target available, try again");
         }
         else if (card.TargetType == TargetType.AnyAlly)
         {

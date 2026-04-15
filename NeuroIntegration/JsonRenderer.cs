@@ -10,12 +10,15 @@ public static class Renderer
 {
     public static void RepresentDeck(this StringBuilder stringBuilder, IEnumerable<CardModel> deck, PileType pile = PileType.Deck)
     {
-        var countedGroup = deck.GroupBy((card) => card.Title);
-        //TODO: Seperate cards if the cost differently, Do the same for playing the cards
+        var countedGroup = deck.GroupBy((card) => card.Title + $"{card.EnergyCost}{card.CurrentStarCost}");
         foreach (var cards in countedGroup)
         {
             var firstCard = cards.First();
-            stringBuilder.AppendLine($"- {cards.Count()}x {TextHelper.StripBBCode(firstCard.Title)} \"{TextHelper.GetCardDescriptionFor(firstCard, pile)}\" and costs {firstCard.EnergyCost.GetAmountToSpend()} Energy" + (firstCard.CanonicalStarCost != -1 ? $" and {firstCard.CurrentStarCost} Stars" : ""));
+            var description = TextHelper.GetCardDescriptionFor(firstCard, pile);
+            var energyCost = firstCard.EnergyCost.GetAmountToSpend() + " Energy";
+            var starCost = firstCard.CanonicalStarCost != -1 ? $" and {firstCard.CurrentStarCost} Stars" : "";
+            var line = $"- {cards.Count()}x {TextHelper.StripBBCode(firstCard.Title)} \"{description}\" and costs {energyCost}{starCost}";
+            stringBuilder.AppendLine(line);
         }
     }
     public static void RepresentRelics(this StringBuilder stringBuilder, IEnumerable<RelicModel> relics)
