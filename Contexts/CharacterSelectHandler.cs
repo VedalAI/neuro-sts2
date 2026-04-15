@@ -61,7 +61,7 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
 
         if (ctx.CharacterSelectScreen != null && GodotObject.IsInstanceValid(ctx.CharacterSelectScreen))
         {
-            if (ctx.CharacterSelectScreen.GetNode<Control>("ConfirmButton") is MegaCrit.Sts2.Core.Nodes.CommonUi.NConfirmButton embarkButton
+            if (ctx.CharacterSelectScreen.GetNode<Control>("ConfirmButton") is NConfirmButton embarkButton
                 && embarkButton.IsEnabled)
                 commands.Add(new ConstructedAction("embark", "Start a new Run with the current selected Character"));
         }
