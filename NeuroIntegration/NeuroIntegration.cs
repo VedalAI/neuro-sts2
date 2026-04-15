@@ -24,6 +24,8 @@ public class NeuroIntegration : Node
     get; private set;
   }
 
+  private ActionWindow? lastWindow;
+
   /// <summary>
   /// These are Actions that are always available for neuro.
   /// if they are one-time use the Action itself has to handle this
@@ -76,6 +78,7 @@ public class NeuroIntegration : Node
   }
 
   ContextType lastContext = ContextType.Unknown;
+
   public void HandleDecisionPoint()
   {
 
@@ -98,8 +101,7 @@ public class NeuroIntegration : Node
       lastContext = ctx.Type;
     }
 
-    var handler = ActionExecutor.GetHandlers()
-    .FirstOrDefault(h => h.Type == ctx.Type);
+    var handler = ActionExecutor.GetHandlers().GetValueOrDefault(ctx.Type);
 
     if (handler == null)
     {
@@ -117,12 +119,13 @@ public class NeuroIntegration : Node
         GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
         return;
       }
-      var window = ActionWindow.Create(this).SetContext(handler.GetContext(ctx));
+      lastWindow?.End();
+      lastWindow = ActionWindow.Create(this).SetContext(handler.GetContext(ctx));
       var new_global_actions = new List<ConstructedAction>();
       foreach (var item in CommandsList)
       {
         if (!item.Persistant_action)
-          window.AddAction(item);
+          lastWindow.AddAction(item);
         else
         {
           if (GlobalActions.Find((action) => action.Name == item.Name) == null)
@@ -133,8 +136,8 @@ public class NeuroIntegration : Node
         }
       }
       NeuroActionHandler.RegisterActions(new_global_actions);
-      window.SetForce(1, "It's your Turn please do an Action", null);
-      window.Register();
+      lastWindow.SetForce(1, "It's your Turn please do an Action", null);
+      lastWindow.Register();
     }
     else
     {
