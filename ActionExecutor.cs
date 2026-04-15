@@ -8,29 +8,15 @@ using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Contexts;
 using Sts2Agent.Utilities;
+using MegaCrit.Sts2.Core.Helpers;
+using MegaCrit.Sts2.Core.Modding;
+using System.Reflection;
+using HarmonyLib;
 
 namespace Sts2Agent;
 
 public static class ActionExecutor
 {
-    private static readonly List<IContextHandler> Handlers =
-    [
-        new MapHandler(),
-        new HandSelectionHandler(),
-        new CardSelectionHandler(),
-        new BundleSelectionHandler(),
-        new RewardsHandler(),
-        new CombatHandler(),
-        new EventContextHandler(),
-        new RestSiteHandler(),
-        new ShopHandler(),
-        new TreasureHandler(),
-        new GameOverHandler(),
-        new CharacterSelectHandler(),
-        new MainMenuHandler()
-    ];
-
-
     public static ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData)
     {
 
@@ -44,8 +30,7 @@ public static class ActionExecutor
                 return ExecutionResult.Failure("No active run or interactive screen");
 
             // Dispatch to the handler matching the current context
-            var handler = Handlers.FirstOrDefault(h => h.Type == ctx.Type);
-            if (handler != null)
+            if (Handlers.TryGetValue(ctx.Type, out var handler))
             {
                 var result = handler.Internal_Validate(action, data, out parsedData, ctx);
                 //This can happen if situation is stable. but GetCommands returned stale actions, like buttons not found due to overlay not being populated yet (game async population)
@@ -83,8 +68,7 @@ public static class ActionExecutor
             }
 
             // Dispatch to the handler matching the current context
-            var handler = Handlers.FirstOrDefault(h => h.Type == ctx.Type);
-            if (handler != null)
+            if (Handlers.TryGetValue(ctx.Type, out var handler))
             {
                 _ = GodotMainThread.RunAsync(async () =>
                 {
@@ -127,8 +111,32 @@ public static class ActionExecutor
     }
 
 
+    private static Dictionary<ContextType, IContextHandler>? _handlers;
+    public static Dictionary<ContextType, IContextHandler> Handlers
+    {
+        get
+        {
+            if (_handlers != null)
+                return _handlers;
+            var handlers = new Dictionary<ContextType, IContextHandler>();
+            foreach (var item in ReflectionHelper.GetSubtypesInMods<IContextHandler>())
+            {
+                if (Activator.CreateInstance(item) is IContextHandler contextHandler)
+                {
+                    if (!handlers.TryAdd(contextHandler.Type, contextHandler))
+                    {
+                        Plugin.LogError($"[CRITICAL] Found multiple Handlers for the same type: {contextHandler.Type}");
+                    }
+                }
+            }
+
+            Plugin.LogDebug($"Found {handlers.Count} handlers for action system:\n{string.Join(", ", handlers.Select(h => h.GetType().Name))}");
+            _handlers = handlers;
+            return _handlers;
+        }
+    }
     /// <summary>
     /// Get the handler registry for use by GameStateSerializer.
     /// </summary>
-    public static IReadOnlyList<IContextHandler> GetHandlers() => Handlers;
+    public static IReadOnlyDictionary<ContextType, IContextHandler> GetHandlers() => Handlers;
 }
