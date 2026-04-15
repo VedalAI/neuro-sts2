@@ -46,18 +46,21 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
 
         try
         {
-            eventBuilder.Append("Event Description: ");
             var desc = evt.Description;
             if (desc != null)
+            {
+                eventBuilder.AppendLine("Event Description: ");
                 eventBuilder.AppendLine(desc.GetUnformatedText());
+            }
             else
                 eventBuilder.AppendLine(TextHelper.SafeLocString(() => evt.InitialDescription));
         }
         catch
         {
         }
-        eventBuilder.AppendLine("Available options are: ");
 
+        if (evt.CurrentOptions.Count > 0)
+            eventBuilder.AppendLine("Available options are: ");
         foreach (var eventoption in evt.CurrentOptions)
         {
 

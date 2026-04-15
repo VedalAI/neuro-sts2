@@ -7,6 +7,7 @@ using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.Combat;
+using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Nodes.Screens;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
@@ -35,6 +36,7 @@ public enum ContextType
     GameOver,
     CharacterSelect,
     MainMenu,
+    CrstalBallEvent,
     Unknown
 }
 
@@ -76,6 +78,9 @@ public class ContextInfo
     public MerchantInventory? ShopInventory { get; init; }
     public bool ShopIsOpen { get; init; }
     public List<MerchantEntry>? ShopItems { get; init; }
+
+    // Crystal ball Event
+    public NCrystalSphereScreen? CrystalSphereScreen { get; init; }
 }
 
 public static class GameContext
@@ -143,6 +148,7 @@ public static class GameContext
             };
         }
 
+        Plugin.LogDebug($"test {overlayScreen as NCrystalSphereScreen}");
         // Bundle/card pack selection screen
         if (overlayScreen is NChooseABundleSelectionScreen bundleScreen)
         {
@@ -200,6 +206,17 @@ public static class GameContext
                     OverlayNode = overlayNode
                 };
             }
+            if (overlayScreen is NCrystalSphereScreen CrystalSphereEvent)
+            {
+                return new ContextInfo
+                {
+                    Type = ContextType.CrstalBallEvent,
+                    RunState = runState,
+                    CrystalSphereScreen = CrystalSphereEvent
+                };
+
+            }
+
         }
 
         // 3. Hand card selection (discard/exhaust prompts during combat)
@@ -235,7 +252,7 @@ public static class GameContext
             {
                 Type = ContextType.Event,
                 RunState = runState,
-                EventRoom = eventRoom
+                EventRoom = eventRoom,
             };
         }
 

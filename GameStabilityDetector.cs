@@ -201,6 +201,7 @@ public static class GameStabilityDetector
 
             case ContextType.BundleSelection:
             case ContextType.CardSelection:
+            case ContextType.CrstalBallEvent:
             case ContextType.Rewards:
                 Plugin.LogDebug($"IsStable: overlay {ctx.Type} → true");
                 return true;
