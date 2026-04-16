@@ -148,7 +148,6 @@ public static class GameContext
             };
         }
 
-        Plugin.LogDebug($"test {overlayScreen as NCrystalSphereScreen}");
         // Bundle/card pack selection screen
         if (overlayScreen is NChooseABundleSelectionScreen bundleScreen)
         {
