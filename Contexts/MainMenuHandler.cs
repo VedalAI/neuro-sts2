@@ -22,7 +22,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
 {
     public class Result : IContextResult
     {
-
+        public NClickableControl Button { get; internal set; }
     }
     public ContextType Type => ContextType.MainMenu;
 
@@ -30,6 +30,16 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
     {
         StringBuilder stringBuilder = new();
         stringBuilder.Append("You are on the Main Menu of Slay the Spire 2, ");
+        var sceneRoot = SceneHelper.GetSceneRoot();
+        var mainMenu = sceneRoot != null ? UiHelper.FindFirst<NMainMenu>(sceneRoot) : null;
+        if (mainMenu == null) return stringBuilder.ToString();
+        var timelineButton = mainMenu.Get(NMainMenu.PropertyName._timelineButton).As<NMainMenuTextButton>();
+        var notification = mainMenu.Get(NMainMenu.PropertyName._timelineNotificationDot).As<Control>();
+
+        if (notification.Visible && timelineButton.IsEnabled)
+        {
+            stringBuilder.AppendLine("You have an Unseen Epoch available");
+        }
         if (SaveManager.Instance.HasRunSave)
             stringBuilder.AppendLine("You have a already ongoing Run, you can choose to continue your last adventure or abandon it to start fresh with a new character");
         else
@@ -61,6 +71,12 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
                 commands.Add(new("start_run", "Start a new run"));
         }
 
+        var timelineButton = mainMenu.Get(NMainMenu.PropertyName._timelineButton).As<NMainMenuTextButton>();
+        if (timelineButton.IsEnabled && timelineButton.Visible && timelineButton.Get(NMainMenu.PropertyName._timelineNotificationDot).As<Control>() is Control c && c.Visible)
+        {
+            commands.Add(new("view_timeline", "View the Timeline and explore unseen epochs"));
+        }
+
         return commands;
     }
 
@@ -74,21 +90,39 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
             case "continue_run":
                 var continueBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton");
                 if (continueBtn != null && continueBtn.IsEnabled)
+                {
+                    parsedData.Button = continueBtn;
                     return ExecutionResult.Success();
+                }
                 else
                     return ExecutionResult.ModFailure("Can't continue run if no previous run exists");
             case "abandon_run":
                 var abandonBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/AbandonRunButton");
                 if (abandonBtn != null && abandonBtn.IsEnabled)
+                {
+                    parsedData.Button = abandonBtn;
                     return ExecutionResult.Success();
+                }
                 else
                     return ExecutionResult.ModFailure("Can't abandon run if no previous run exists");
             case "start_run":
                 var spButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton");
                 if (spButton != null && spButton.IsEnabled)
+                {
+                    parsedData.Button = spButton;
                     return ExecutionResult.Success();
+                }
                 else
                     return ExecutionResult.ModFailure("can't start run. A run is already active");
+            case "view_timeline":
+                var timelineButton = mainMenu.Get(NMainMenu.PropertyName._timelineButton).As<NMainMenuTextButton>();
+                if (timelineButton.IsEnabled)
+                {
+                    parsedData.Button = timelineButton;
+                    return ExecutionResult.Success();
+                }
+                else
+                    return ExecutionResult.ModFailure("Timeline is not available or not enabled");
         }
 
         return ExecutionResult.Failure("Unknown Action called in Main Menu");
@@ -97,21 +131,9 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
     {
         Plugin.LogDebug($"Action: {action},result {result}, contextinfo {ctx}");
         var sceneRoot = SceneHelper.GetSceneRoot();
-        if (sceneRoot == null)
-            return ExecutionResult.Failure("Cannot access scene tree");
-
-        var mainMenu = UiHelper.FindFirst<NMainMenu>(sceneRoot);
-        if (mainMenu == null)
-            return ExecutionResult.Failure("Main menu not found");
-
         if (action.Name == "continue_run")
         {
-            var continueBtn = await GodotMainThread.RunAsync(() =>
-                mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton"));
-            if (continueBtn == null || !continueBtn.IsEnabled)
-                return ExecutionResult.Failure("Continue button not available");
-
-            await GodotMainThread.ClickAsync(continueBtn);
+            await GodotMainThread.ClickAsync(result.Button);
 
             // Wait for the run to load
             for (int i = 0; i < 100; i++)
@@ -127,12 +149,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
 
         if (action.Name == "abandon_run")
         {
-            var abandonBtn = await GodotMainThread.RunAsync(() =>
-                mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/AbandonRunButton"));
-            if (abandonBtn == null || !abandonBtn.IsEnabled)
-                return ExecutionResult.Failure("Abandon run button not available");
-
-            await GodotMainThread.ClickAsync(abandonBtn);
+            await GodotMainThread.ClickAsync(result.Button);
 
             // The abandon button shows a confirmation popup — find and click "Yes"
             await Task.Delay(500);
@@ -155,15 +172,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
 
         if (action.Name == "start_run")
         {
-            // Click the singleplayer button
-            var spButton = await GodotMainThread.RunAsync(() =>
-                mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton"));
-            if (spButton == null)
-                return ExecutionResult.Failure("Singleplayer button not found");
-            if (!spButton.IsEnabled)
-                return ExecutionResult.Failure("Singleplayer button is not enabled");
-
-            await GodotMainThread.ClickAsync(spButton);
+            await GodotMainThread.ClickAsync(result.Button);
             await Task.Delay(500);
 
             // Check if we landed on character select directly (first-time player)
@@ -204,6 +213,10 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
             }
 
             return ExecutionResult.Failure("Timed out waiting for character select screen");
+        }
+        if (action.Name == "view_timeline")
+        {
+            await GodotMainThread.ClickAsync(result.Button);
         }
 
         return null;

@@ -15,6 +15,7 @@ using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
+using MegaCrit.Sts2.Core.Nodes.Screens.Timeline;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Agent.Utilities;
@@ -37,7 +38,8 @@ public enum ContextType
     CharacterSelect,
     MainMenu,
     CrstalBallEvent,
-    Unknown
+    TimelinesEvent,
+    Unknown,
 }
 
 public class ContextInfo
@@ -81,6 +83,8 @@ public class ContextInfo
 
     // Crystal ball Event
     public NCrystalSphereScreen? CrystalSphereScreen { get; init; }
+    // Timelines
+    public NTimelineScreen? TimelineScreen { get; init; }
 }
 
 public static class GameContext
@@ -108,6 +112,16 @@ public static class GameContext
                     Type = ContextType.CharacterSelect,
                     CharacterSelectScreen = charScreen,
                     CharacterButtons = buttons
+                };
+            }
+
+            var timelineScreens = UiHelper.FindFirst<NTimelineScreen>(sceneRoot);
+            if (timelineScreens != null && timelineScreens.Visible)
+            {
+                return new ContextInfo
+                {
+                    Type = ContextType.TimelinesEvent,
+                    TimelineScreen = timelineScreens
                 };
             }
 

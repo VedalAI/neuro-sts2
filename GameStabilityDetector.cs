@@ -260,7 +260,9 @@ public static class GameStabilityDetector
             case ContextType.MainMenu:
                 Plugin.LogDebug("IsStable: main menu → true");
                 return true;
-
+            case ContextType.TimelinesEvent:
+                Plugin.LogDebug("IsStable: timelines event → true");
+                return true;
             case ContextType.CharacterSelect:
                 Plugin.LogDebug("IsStable: character select → true");
                 return true;
@@ -279,7 +281,6 @@ public static class GameStabilityDetector
                     Plugin.LogDebug($"IsStable: treasure proceed={proceedEnabled} → {proceedEnabled}");
                     return proceedEnabled;
                 }
-
             default:
                 return false;
         }

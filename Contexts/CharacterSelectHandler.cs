@@ -13,6 +13,7 @@ using NeuroSdk.Actions;
 using NeuroSdk.Json;
 using System.Text;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
+using MegaCrit.Sts2.Core.Saves;
 
 namespace Sts2Agent.Contexts;
 
@@ -133,8 +134,15 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
             if (!embarkButton.IsEnabled)
                 return ExecutionResult.Failure("Embark button is not enabled (select a character first)");
 
+            //This hides the initial asking prompt for tutorials, just disabling it before the first popup to not interupt future embarks
+            if (!SaveManager.Instance.SeenFtue("accept_tutorials_ftue"))
+            {
+                SaveManager.Instance.MarkFtueAsComplete("accept_tutorials_ftue");
+                SaveManager.Instance.SetFtuesEnabled(false);
+            }
 
             await GodotMainThread.ClickAsync(embarkButton);
+
 
             // Wait for the run to start (RunManager becomes active)
             for (int i = 0; i < 100; i++)
@@ -143,6 +151,8 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
                 if (RunManager.Instance?.IsInProgress == true)
                     break;
             }
+
+
 
             Plugin.Log("Embarked on run");
             return ExecutionResult.Success("Embarked on run");

@@ -119,8 +119,8 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
       var cells = ctx.CrystalSphereScreen.Get(NCrystalSphereScreen.PropertyName._cellContainer).As<Control>().GetChildren().OfType<NCrystalSphereCell>();
       foreach (var cell in cells)
       {
-        if (!cell.Entity.IsHidden) continue;
         if ($"{cell.Entity.X}_{cell.Entity.Y}" != $"{data.Data["x"]}_{data.Data["y"]}") continue;
+        if (!cell.Entity.IsHidden) return ExecutionResult.Failure($"Position at {data.Data["x"]}x and {data.Data["y"]}y is already unlocked. try a different position");
         result.SelectedCell = cell;
         return ExecutionResult.Success();
       }
