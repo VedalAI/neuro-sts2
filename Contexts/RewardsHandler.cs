@@ -17,6 +17,7 @@ using NeuroSdk.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
+using MegaCrit.Sts2.Core.Context;
 
 namespace Sts2Agent.Contexts;
 
@@ -111,7 +112,17 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>
             if (rewardIndex < 0 || rewardIndex >= buttons.Count)
                 return ExecutionResult.Failure($"Reward index {rewardIndex} out of range (available: {buttons.Count})");
 
-            result.Button = buttons[(int)rewardIndex];
+            var rewardButton = buttons[(int)rewardIndex];
+            result.Button = rewardButton;
+            if (rewardButton.Reward is PotionReward potionReward)
+            {
+                var player = LocalContext.GetMe(ctx.RunState!.Players);
+                if (player != null && player.PotionSlots.All(x => x != null))
+                {
+                    return ExecutionResult.Failure("Potion slots are full, can't pick up more potions");
+                }
+            }
+            return ExecutionResult.Success();
         }
         else
         {
