@@ -15,6 +15,8 @@ using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 using NeuroSdk.Json;
+using System.Text;
+using MegaCrit.Sts2.Core.Models;
 
 namespace Sts2Agent.Contexts;
 
@@ -32,7 +34,24 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
 
     public string GetContext(ContextInfo ctx)
     {
-        return "You need to select a card";
+        StringBuilder stringBuilder = new();
+        stringBuilder.AppendLine("You need to select a card");
+        var cardHolders = ctx.CardHolders;
+        if (cardHolders == null) return stringBuilder.ToString();
+        // Don't offer commands until the screen is fully initialized (_completionSource set)
+        if (ctx.OverlayScreen != null)
+        {
+            var tcsField = ctx.OverlayScreen.GetType().GetField("_completionSource",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (tcsField != null && tcsField.GetValue(ctx.OverlayScreen) == null)
+                return stringBuilder.ToString();
+        }
+        var cardModels = cardHolders.Select(x => x.CardModel);
+        if (cardModels == null || !cardModels.Any())
+            return stringBuilder.ToString();
+        stringBuilder.AppendLine("The following cards are selectable:");
+        stringBuilder.RepresentDeck(cardModels.Cast<CardModel>());
+        return stringBuilder.ToString();
     }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
