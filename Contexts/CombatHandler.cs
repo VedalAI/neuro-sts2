@@ -27,7 +27,6 @@ using MegaCrit.Sts2.Core.Localization;
 
 namespace Sts2Agent.Contexts;
 
-// TODO: Figure out why "Fishy oil" potion crashed my game with segmentation fault on use
 public class CombatHandler : IContextHandler<CombatHandler.Result>
 {
     public class Result : IContextResult
@@ -46,7 +45,8 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         stringBuilder.AppendLine("## You are in combat");
         if (combatState == null)
         {
-            return new ContextReturn(stringBuilder.ToString());
+            Plugin.LogError("Combat state is null in combat context, this should never happen");
+            return new ContextReturn("");// Return empty context if combat state is null, this should never happen but just in case
         }
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var pcs = player.PlayerCombatState;
@@ -139,7 +139,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
             }
             stringBuilder.RepresentEvents(events);
         }
-        return new ContextReturn(stringBuilder.ToString());
+        return new ContextReturn(stringBuilder.ToString(), !firstContext);
 
     }
 
