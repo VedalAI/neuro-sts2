@@ -40,10 +40,10 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
         return new ContextReturn(starting_character.ToString());
     }
 
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
-        if (ctx.CharacterButtons == null) return commands;
+        if (ctx.CharacterButtons == null) return new CommandReturn();
 
         var character_names = new List<string>();
 
@@ -67,7 +67,7 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
                 commands.Add(new ConstructedAction("embark", "Start a new Run with the current selected Character"));
         }
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
 

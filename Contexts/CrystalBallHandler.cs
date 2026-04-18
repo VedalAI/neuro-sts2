@@ -48,15 +48,15 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     return new ContextReturn(stringBuilder.ToString());
   }
 
-  public List<ConstructedAction> GetCommands(ContextInfo ctx)
+  public CommandReturn GetCommands(ContextInfo ctx)
   {
     var commands = new List<ConstructedAction>();
-    if (ctx.CrystalSphereScreen == null) return commands;
+    if (ctx.CrystalSphereScreen == null) return new CommandReturn();
     var eventScreen = ctx.CrystalSphereScreen;
     if (UiHelper.FindFirst<NProceedButton>(eventScreen) is NProceedButton proceed && proceed.IsEnabled)
     {
       commands.Add(new("proceed", "Proceed out of the Crystal Ball even"));
-      return commands;
+      return new CommandReturn(commands);
     }
 
     var buttons = UiHelper.FindAll<NDivinationButton>(eventScreen);
@@ -92,7 +92,7 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     }
 
 
-    return commands;
+    return new CommandReturn(commands);
   }
 
   public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)

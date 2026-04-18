@@ -44,7 +44,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
     return new ContextReturn(stringBuilder.ToString());
   }
 
-  public List<ConstructedAction> GetCommands(ContextInfo ctx)
+  public CommandReturn GetCommands(ContextInfo ctx)
   {
     var commands = new List<ConstructedAction>();
     if (UiHelper.FindFirst<NTimelineTutorial>(ctx.TimelineScreen) is not null)
@@ -67,17 +67,19 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
       commands.Add(new("proceed_epoch", "Close the unlocked Epoch"));
     }
     var unlockScreen = UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
-    if (unlockScreen != null)
+    if (unlockScreen != null && unlockScreen.Visible)
     {
       //TODO: a switch for each type of unlock screen to send better context to neuro
-      commands.Add(new("close_unlock", "Close the Unlock Screen"));
+      var button = UiHelper.FindFirst<NUnlockConfirmButton>(unlockScreen);
+      if (button != null)
+        commands.Add(new("close_unlock", "Close the Unlock Screen"));
     }
     var backButton = ctx.TimelineScreen.Get(NTimelineScreen.PropertyName._backButton).As<NBackButton>();
     if (backButton != null && backButton.IsEnabled && backButton.Visible)
     {
       commands.Add(new("back_to_main_menu", "Closes the Timeline and brings you back to the Main Menu"));
     }
-    return commands;
+    return new CommandReturn(commands, true);
   }
 
   public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
@@ -147,17 +149,18 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
   }
   public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
   {
+    await Task.Delay(1000);
     if (action.Name == "proceed" || action.Name == "back_to_main_menu")
     {
       await GodotMainThread.ClickAsync(result.ProceedButton);
-      await Task.Delay(200);// wait for the screen to fade
+      await Task.Delay(1000);// wait for the screen to fade
       return ExecutionResult.Success();
     }
     if (action.Name == "unlock_epoch")
     {
       await GodotMainThread.ClickAsync(result.EpochButton);
       NeuroIntegration.SendContext($"Unlocked Epoch: {TextHelper.StripBBCode(result.EpochButton.model.Description)}");
-      await Task.Delay(200);// wait for the screen to fade
+      await Task.Delay(1000);// wait for the screen to fade
       return ExecutionResult.Success();
     }
     if (action.Name == "proceed_epoch")

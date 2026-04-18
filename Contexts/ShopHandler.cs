@@ -41,7 +41,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         stringBuilder.AppendLine("Once you are done with all your purchases you can leave the shop and proceed with your adventure");
         return new ContextReturn(stringBuilder.ToString());
     }
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
 
@@ -49,7 +49,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         {
             commands.Add(new("shop_open", "Open the Shop"));
             commands.Add(new("shop_leave", "Leave the Shop"));
-            return commands;
+            return new CommandReturn(commands);
         }
 
         if (ctx.ShopItems != null)
@@ -64,7 +64,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         }
         commands.Add(new("shop_leave", "Leave the Shop"));
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)

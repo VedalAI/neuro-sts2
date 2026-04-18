@@ -38,7 +38,7 @@ public class TreasureHandler : IContextHandler<TreasureHandler.Result>
         }
         return new ContextReturn(stringBuilder.ToString());
     }
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
 
@@ -46,7 +46,7 @@ public class TreasureHandler : IContextHandler<TreasureHandler.Result>
         if (room != null && GodotObject.IsInstanceValid(room) && room.ProceedButton?.IsEnabled == true)
             commands.Add(new("proceed", "Proceed out of the treasure room"));
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
 

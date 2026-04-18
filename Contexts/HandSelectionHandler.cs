@@ -96,11 +96,11 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
 
     }
 
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
         var hand = ctx.Hand;
-        if (hand == null) return commands;
+        if (hand == null) return new CommandReturn();
 
         var holders = GetVisibleHolders(hand);
         var min_select = 0;
@@ -138,7 +138,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
                 commands.Add(new("confirm_selection", "Confirm your Selection of Cards and Proceed"));
         }
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)

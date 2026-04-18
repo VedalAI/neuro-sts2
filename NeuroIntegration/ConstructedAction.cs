@@ -29,6 +29,7 @@ public class ConstructedAction(string name, string description, JsonSchema? sche
     protected override string Description => description!;
 
     private JsonSchema? _schema = schema;
+    public ActionJData Data;
 
     protected override JsonSchema? Schema => _schema;
 
@@ -47,5 +48,10 @@ public class ConstructedAction(string name, string description, JsonSchema? sche
     public override string ToString()
     {
         return $"[{Name}] {description}, Stays Active [{Persistant_action}], jsonSchema {Schema}";
+    }
+
+    public bool HasSchema()
+    {
+        return Schema != null;
     }
 }

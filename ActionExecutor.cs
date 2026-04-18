@@ -17,6 +17,12 @@ namespace Sts2Agent;
 
 public static class ActionExecutor
 {
+
+    private static Queue<ConstructedAction> enqueuedActions = new Queue<ConstructedAction>();
+    public static bool HasEnqueuedActions()
+    {
+        return enqueuedActions.Count > 0;
+    }
     public static ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData)
     {
 
@@ -40,7 +46,7 @@ public static class ActionExecutor
                     Plugin.LogError("Stable situation but Action Window has Stale Actions, reseting");
                     action.ActionWindow?.End();
                     GameStabilityDetector.ResetWasStable();
-                    GameStabilityDetector.ScheduleStabilityCheck();
+                    GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
                 }
                 return result;
             }
@@ -51,6 +57,34 @@ public static class ActionExecutor
         {
             Plugin.LogError($"Action execution error: {e}");
             return ExecutionResult.Failure(e.Message);
+        }
+    }
+    public static void EnqueueAction(ConstructedAction constructedAction)
+    {
+        Plugin.LogDebug($"Enqueuing Action: {constructedAction.Name}");
+        if (constructedAction.Data == null)
+        {
+            constructedAction.Data = new();
+        }
+        enqueuedActions.Enqueue(constructedAction);
+        GameStabilityDetector.ResetWasStable();
+        GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
+    }
+    public static bool ProcessEnqueuedActions()
+    {
+        if (enqueuedActions.Count == 0)
+            return false;
+
+        var action = enqueuedActions.Dequeue();
+        var validationResult = Validate(action, action.Data, out var parsedData);
+        if (validationResult.Successful)
+        {
+            Execute(action, parsedData);
+            return true;
+        }
+        else
+        {
+            return false;
         }
     }
     public static void Execute(ConstructedAction action, object? ParsedData)
@@ -139,4 +173,5 @@ public static class ActionExecutor
     /// Get the handler registry for use by GameStateSerializer.
     /// </summary>
     public static IReadOnlyDictionary<ContextType, IContextHandler> GetHandlers() => Handlers;
+
 }

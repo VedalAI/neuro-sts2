@@ -109,21 +109,50 @@ public class NeuroIntegration : Node
       return;
     }
 
-
-    if (handler.GetCommands(ctx) is List<ConstructedAction> CommandsList && CommandsList.Count > 0)
+    if (ctx == null)
     {
-      if (ctx == null)
+      Plugin.LogError("Couldn't resolve current Context");
+      GameStabilityDetector.ResetWasStable();
+      GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
+      return;
+    }
+
+    if (ActionExecutor.ProcessEnqueuedActions())
+    {
+      return;
+    }
+    if (handler.GetCommands(ctx) is CommandReturn CommandsList)
+    {
+      var contextReturn = handler.GetContext(ctx);
+      if (CommandsList.Commands.Count == 0)
       {
-        Plugin.LogError("Couldn't resolve current Context");
+        if (!string.IsNullOrEmpty(contextReturn.Message))
+          SendContext(contextReturn.Message, contextReturn.Silent);
+        Plugin.LogDebug("No Commands to run at this Decision Point");
         GameStabilityDetector.ResetWasStable();
         GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
         return;
       }
+      Plugin.LogDebug($"Commands list contains {CommandsList.Commands.Count} commands. SkipActionWindow: {CommandsList.SkipActionWindow}");
+      if (CommandsList.Commands.Count == 1 && !CommandsList.Commands[0].HasSchema())
+      {
+        ActionExecutor.EnqueueAction(CommandsList.Commands[0]);
+        if (!string.IsNullOrEmpty(contextReturn.Message))
+          SendContext(contextReturn.Message, contextReturn.Silent);
+        Plugin.LogDebug("Only one command without parameters, enqueuing directly");
+        return;
+      }
+      if (CommandsList.SkipActionWindow && !CommandsList.Commands.Any(cmd => cmd.HasSchema()) && CommandsList.Commands.Count <= 1)
+      {
+        if (!string.IsNullOrEmpty(contextReturn.Message))
+          SendContext(contextReturn.Message, contextReturn.Silent);
+        Plugin.LogDebug("Context Handler requested to Skip, not sending Action Window");
+        return;
+      }
       lastWindow?.End();
-      var contextReturn = handler.GetContext(ctx);
       lastWindow = ActionWindow.Create(this).SetContext(contextReturn.Message, contextReturn.Silent);
       var new_global_actions = new List<ConstructedAction>();
-      foreach (var item in CommandsList)
+      foreach (var item in CommandsList.Commands)
       {
         if (!item.Persistant_action)
           lastWindow.AddAction(item);
@@ -142,7 +171,7 @@ public class NeuroIntegration : Node
     }
     else
     {
-      Plugin.LogError("Decision Point Reached without actual commands to run!");
+      Plugin.LogWarning("Decision Point Reached without actual commands to run!");
       GameStabilityDetector.ResetWasStable();
       GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
     }

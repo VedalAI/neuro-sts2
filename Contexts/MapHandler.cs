@@ -39,10 +39,10 @@ public class MapHandler : IContextHandler<MapHandler.Result>
         return new ContextReturn(mapBuilder.ToString());
     }
 
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
-        if (ctx.AvailableMapNodes == null) return commands;
+        if (ctx.AvailableMapNodes == null) return new CommandReturn();
 
         commands.Add(new("select_map_node", "Select a point to travel to", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
@@ -50,7 +50,7 @@ public class MapHandler : IContextHandler<MapHandler.Result>
         })));
 
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
 

@@ -29,7 +29,6 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
     public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
-        stringBuilder.Append("You are on the Main Menu of Slay the Spire 2, ");
         var sceneRoot = SceneHelper.GetSceneRoot();
         var mainMenu = sceneRoot != null ? UiHelper.FindFirst<NMainMenu>(sceneRoot) : null;
         if (mainMenu == null) return new ContextReturn(stringBuilder.ToString());
@@ -38,46 +37,61 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
 
         if (notification.Visible && timelineButton.IsEnabled)
         {
-            stringBuilder.AppendLine("You have an Unseen Epoch available");
+            stringBuilder.AppendLine("You have an Unseen Epoch, Unlocking it now");
+            return new ContextReturn(stringBuilder.ToString(), false);
         }
         if (SaveManager.Instance.HasRunSave)
-            stringBuilder.AppendLine("You have a already ongoing Run, you can choose to continue your last adventure or abandon it to start fresh with a new character");
+        {
+
+            stringBuilder.AppendLine("You have a previous run in progress, Continuing it now");
+            var continueBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton");
+            if (continueBtn != null && continueBtn.IsEnabled)
+            {
+                return new ContextReturn(stringBuilder.ToString(), false);
+            }
+        }
         else
-            stringBuilder.AppendLine("Start a new Run to select a Character and Start your Adventure! And Conquer the Spire");
-        return new ContextReturn(stringBuilder.ToString());
+        {
+
+            stringBuilder.AppendLine("Select a Character, Start your Adventure! And Conquer the Spire");
+            var spButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton");
+            if (spButton != null && spButton.IsEnabled)
+            {
+                return new ContextReturn(stringBuilder.ToString(), false);
+            }
+        }
+        return new ContextReturn(stringBuilder.ToString(), false);
     }
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
 
         var sceneRoot = SceneHelper.GetSceneRoot();
         var mainMenu = sceneRoot != null ? UiHelper.FindFirst<NMainMenu>(sceneRoot) : null;
-        if (mainMenu == null) return commands;
+        if (mainMenu == null) return new CommandReturn();
 
         if (SaveManager.Instance.HasRunSave)
         {
             var continueBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton");
             if (continueBtn != null && continueBtn.IsEnabled)
-                commands.Add(new("continue_run", "Continue your Last run"));
-
-            var abandonBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/AbandonRunButton");
-            if (abandonBtn != null && abandonBtn.IsEnabled)
-                commands.Add(new("abandon_run", "Abandon your Last run"));
+                commands.Add(new ConstructedAction("continue_run", "Continue your Last run"));
         }
         else
         {
             var spButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton");
             if (spButton != null && spButton.IsEnabled)
-                commands.Add(new("start_run", "Start a new run"));
+                commands.Add(new ConstructedAction("start_run", "Start a new run"));
         }
 
         var timelineButton = mainMenu.Get(NMainMenu.PropertyName._timelineButton).As<NMainMenuTextButton>();
-        if (timelineButton.IsEnabled && timelineButton.Visible && timelineButton.Get(NMainMenu.PropertyName._timelineNotificationDot).As<Control>() is Control c && c.Visible)
+        var notification = mainMenu.Get(NMainMenu.PropertyName._timelineNotificationDot).As<Control>();
+
+        if (notification.Visible && timelineButton.IsEnabled)
         {
-            commands.Add(new("view_timeline", "View the Timeline and explore unseen epochs"));
+            commands.Add(new ConstructedAction("view_timeline", "View the Timeline and explore unseen epochs"));
         }
 
-        return commands;
+        return new CommandReturn(commands, true);
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
@@ -131,6 +145,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
     {
         Plugin.LogDebug($"Action: {action},result {result}, contextinfo {ctx}");
         var sceneRoot = SceneHelper.GetSceneRoot();
+        await Task.Delay(2000);
         if (action.Name == "continue_run")
         {
             await GodotMainThread.ClickAsync(result.Button);

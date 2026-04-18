@@ -153,14 +153,14 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
         return result;
     }
 
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
         var eventRoom = ctx.EventRoom;
-        if (eventRoom == null) return commands;
+        if (eventRoom == null) return new CommandReturn();
 
         var evt = eventRoom.LocalMutableEvent;
-        if (evt == null) return commands;
+        if (evt == null) return new CommandReturn();
 
         if (evt.IsFinished)
         {
@@ -174,7 +174,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
             })));
         }
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)

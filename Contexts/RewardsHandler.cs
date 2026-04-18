@@ -67,11 +67,11 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>
         return new ContextReturn(stringBuilder.ToString());
     }
 
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
         var rewardsScreen = ctx.RewardsScreen;
-        if (rewardsScreen == null) return commands;
+        if (rewardsScreen == null) return new CommandReturn();
 
         var buttons = GetEnabledRewardButtons(rewardsScreen);
         if (buttons.Count > 0)
@@ -94,7 +94,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>
             else
                 commands.Add(new("proceed", "Proceed out of the Rewards room"));
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)

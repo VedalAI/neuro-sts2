@@ -13,12 +13,17 @@ public struct ContextReturn(string message, bool silent = false)
     public string Message = message;
     public bool Silent = silent;
 }
+public struct CommandReturn(List<ConstructedAction> commands, bool SkipCommands = false)
+{
+    public List<ConstructedAction> Commands = commands;
+    public bool SkipActionWindow = SkipCommands;
+}
 public interface IContextResult { }
 public interface IContextHandler
 {
     ContextType Type { get; }
     ContextReturn GetContext(ContextInfo ctx);
-    List<ConstructedAction> GetCommands(ContextInfo ctx);
+    CommandReturn GetCommands(ContextInfo ctx);
     ExecutionResult Internal_Validate(ConstructedAction action, ActionJData data, out object parsedData, ContextInfo ctx);
 
     Task<ExecutionResult?> Internal_TryExecute(ConstructedAction action, object ParsedData, ContextInfo ctx);

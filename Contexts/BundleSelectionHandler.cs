@@ -50,11 +50,11 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Res
         }
         return new ContextReturn(stringBuilder.ToString());
     }
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
         var bundles = ctx.Bundles;
-        if (bundles == null) return commands;
+        if (bundles == null) return new CommandReturn();
 
         commands.Add(new("select_bundle", "Select a bundle of cards", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
@@ -66,7 +66,7 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Res
             }
         })));
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)

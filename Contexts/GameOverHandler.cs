@@ -137,13 +137,13 @@ public class GameOverHandler : IContextHandler<GameOverHandler.GameOverResult>
         }
         return new ContextReturn(stringBuilder.ToString());
     }
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
 
         var screen = NOverlayStack.Instance?.Peek() as NGameOverScreen;
         if (screen == null)
-            return commands;
+            return new CommandReturn();
 
         var phase = GetPhase(screen);
         if (phase == Phase.MainMenu)
@@ -158,7 +158,7 @@ public class GameOverHandler : IContextHandler<GameOverHandler.GameOverResult>
                 commands.Add(new("continue", "Continue"));
         }
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
 

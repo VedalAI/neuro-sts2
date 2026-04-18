@@ -31,11 +31,11 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
         stringBuilder.AppendLine("You are at a Rest Site, You can only choose one action to do here. The others will be locked for this Restsite");
         return new ContextReturn(stringBuilder.ToString());
     }
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
         var restRoom = ctx.RestSiteRoom;
-        if (restRoom == null) return commands;
+        if (restRoom == null) return new CommandReturn();
 
         foreach (var opt in restRoom.Options)
         {
@@ -49,7 +49,7 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
         if (nRestSiteRoom?.ProceedButton?.IsEnabled == true)
             commands.Add(new("proceed", "Proceed out of the rest site, The Other Options will be ignored"));
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)

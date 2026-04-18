@@ -143,15 +143,15 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
 
     }
 
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
         var cm = CombatManager.Instance;
-        if (cm == null || !cm.IsPlayPhase || cm.PlayerActionsDisabled) return commands;
+        if (cm == null || !cm.IsPlayPhase || cm.PlayerActionsDisabled) return new CommandReturn();
 
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var pcs = player.PlayerCombatState;
-        if (pcs == null) return commands;
+        if (pcs == null) return new CommandReturn();
 
         //If there is only 1 Target no need to make it more difficult for llms
         if (ctx.CombatState!.HittableEnemies.Count > 1)
@@ -287,7 +287,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         commands.Add(new("end_turn", "Ends your current turn"));
 
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
 
@@ -468,7 +468,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         }
         else if (action.Name == "end_turn")
         {
-            return EndTurn(ctx);
+            return await EndTurn(ctx);
         }
         else
         {
@@ -499,7 +499,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         return ExecutionResult.Success("Card played");
     }
 
-    private ExecutionResult EndTurn(ContextInfo ctx)
+    private async Task<ExecutionResult> EndTurn(ContextInfo ctx)
     {
         var cm = CombatManager.Instance;
         var player = LocalContext.GetMe(ctx.RunState.Players);
@@ -509,6 +509,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
             RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(
                 new MegaCrit.Sts2.Core.GameActions.EndPlayerTurnAction(player, roundNumber));
         }).CallDeferred();
+        // await Task.Delay(500);
 
         Plugin.Log("Ended turn");
         firstContext = true;

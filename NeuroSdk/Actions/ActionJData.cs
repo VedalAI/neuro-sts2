@@ -16,7 +16,8 @@ namespace NeuroSdk.Actions
     {
         public JsonNode? Data { get; private set; }
 
-        private ActionJData()
+        //TODO: Figure out if this can be made public...
+        public ActionJData()
         {
         }
 

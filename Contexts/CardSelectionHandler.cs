@@ -53,11 +53,11 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
         stringBuilder.RepresentDeck(cardModels.Cast<CardModel>());
         return new ContextReturn(stringBuilder.ToString());
     }
-    public List<ConstructedAction> GetCommands(ContextInfo ctx)
+    public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
         var cardHolders = ctx.CardHolders;
-        if (cardHolders == null) return commands;
+        if (cardHolders == null) return new CommandReturn();
 
         // Don't offer commands until the screen is fully initialized (_completionSource set)
         if (ctx.OverlayScreen != null)
@@ -65,7 +65,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
             var tcsField = ctx.OverlayScreen.GetType().GetField("_completionSource",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (tcsField != null && tcsField.GetValue(ctx.OverlayScreen) == null)
-                return commands;
+                return new CommandReturn();
         }
         var min_select = 1;
         var max_select = 1;
@@ -110,7 +110,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
         if (canSkip)
             commands.Add(new("skip", "Skip this selection, No card is going to be added to your deck"));
 
-        return commands;
+        return new CommandReturn(commands);
     }
 
     public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
