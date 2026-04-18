@@ -25,11 +25,11 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
     }
     public ContextType Type => ContextType.RestSite;
 
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
         stringBuilder.AppendLine("You are at a Rest Site, You can only choose one action to do here. The others will be locked for this Restsite");
-        return stringBuilder.ToString();
+        return new ContextReturn(stringBuilder.ToString());
     }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {

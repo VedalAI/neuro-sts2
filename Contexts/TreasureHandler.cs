@@ -22,7 +22,7 @@ public class TreasureHandler : IContextHandler<TreasureHandler.Result>
     }
     public ContextType Type => ContextType.Treasure;
 
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
         stringBuilder.AppendLine("You are a Treasure Room");
@@ -36,7 +36,7 @@ public class TreasureHandler : IContextHandler<TreasureHandler.Result>
                 stringBuilder.AppendLine($"\t- {TextHelper.SafeLocString(() => r.Title)} - {TextHelper.GetRelicDescription(r)}");
             }
         }
-        return stringBuilder.ToString();
+        return new ContextReturn(stringBuilder.ToString());
     }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {

@@ -27,12 +27,12 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Res
     }
     public ContextType Type => ContextType.BundleSelection;
 
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
         var bundles = ctx.Bundles;
-        if (bundles == null) return stringBuilder.ToString();
-        if (bundles.Count == 0) return stringBuilder.ToString();
+        if (bundles == null) return new ContextReturn(stringBuilder.ToString());
+        if (bundles.Count == 0) return new ContextReturn(stringBuilder.ToString());
         stringBuilder.AppendLine($"You have to select a bundle of cards");
         stringBuilder.AppendLine($"You have {bundles.Count} bundles available to choose from:");
 
@@ -48,7 +48,7 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Res
             }
             stringBuilder.AppendLine(")");
         }
-        return stringBuilder.ToString();
+        return new ContextReturn(stringBuilder.ToString());
     }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {
@@ -76,7 +76,7 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Res
             return ExecutionResult.Failure("Bundle index not found");
         var bundles = ctx.Bundles;
 
-        if (bundles == null || bundleIndex < 0 || bundleIndex >= bundles.Count)
+        if (bundles == null || bundleIndex >= bundles.Count)
             return ExecutionResult.Failure($"Bundle index {bundleIndex} out of range (available: {bundles?.Count ?? 0})");
 
         var bundle = bundles[bundleIndex];

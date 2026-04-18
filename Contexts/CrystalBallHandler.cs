@@ -23,11 +23,11 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     internal NProceedButton ProceedButton;
   }
   public ContextType Type => ContextType.CrstalBallEvent;
-  public string GetContext(ContextInfo ctx)
+  public ContextReturn GetContext(ContextInfo ctx)
   {
     StringBuilder stringBuilder = new();
     stringBuilder.AppendLine("You are at the CrystalBall Event");
-    if (ctx.CrystalSphereScreen == null) return stringBuilder.ToString();
+    if (ctx.CrystalSphereScreen == null) return new ContextReturn(stringBuilder.ToString());
     stringBuilder.AppendLine($"You can reveal cells that might or might not contain a good or bad item. If you fully reveal it you gain the item");
 
     var instructionstext = ctx.CrystalSphereScreen.Get(NCrystalSphereScreen.PropertyName._instructionsDescriptionLabel).As<MegaRichTextLabel>();
@@ -45,7 +45,7 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     {
       stringBuilder.AppendLine($"# Currently you have {currentSelection.Get(NDivinationButton.PropertyName._label).As<MegaLabel>().Text} selected");
     }
-    return stringBuilder.ToString();
+    return new ContextReturn(stringBuilder.ToString());
   }
 
   public List<ConstructedAction> GetCommands(ContextInfo ctx)

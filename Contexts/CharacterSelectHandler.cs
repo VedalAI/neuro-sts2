@@ -29,7 +29,7 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
 
     public ContextType Type => ContextType.CharacterSelect;
 
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder starting_character = new();
         var first_character = ctx.CharacterButtons!.FirstOrDefault(c => c.IsSelected);
@@ -37,7 +37,7 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
         starting_character.AppendLine($"# Currently Selected Character is: {TextHelper.StripBBCode(first_character.Character.Title.GetFormattedText())}");
         starting_character.RepresentStartingCharacter(first_character.Character);
 
-        return starting_character.ToString();
+        return new ContextReturn(starting_character.ToString());
     }
 
     public List<ConstructedAction> GetCommands(ContextInfo ctx)

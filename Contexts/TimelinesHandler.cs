@@ -27,7 +27,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
     internal NEpochInspectScreen InspectScreen;
   }
   public ContextType Type => ContextType.TimelinesEvent;
-  public string GetContext(ContextInfo ctx)
+  public ContextReturn GetContext(ContextInfo ctx)
   {
     StringBuilder stringBuilder = new();
     stringBuilder.AppendLine("You are at the Timelines Event");
@@ -41,7 +41,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
       var tounlock = tounlockEpochs.Where(x => x.State == EpochSlotState.Obtained);
       stringBuilder.AppendLine($"You have {tounlock.Count()} epochs to unlocked");
     }
-    return stringBuilder.ToString();
+    return new ContextReturn(stringBuilder.ToString());
   }
 
   public List<ConstructedAction> GetCommands(ContextInfo ctx)

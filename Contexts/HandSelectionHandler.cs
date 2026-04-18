@@ -75,12 +75,12 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
     }
 
 
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
         stringBuilder.AppendLine("You need to Select Cards from your hand.");
         var hand = ctx.Hand;
-        if (hand == null) return stringBuilder.ToString();
+        if (hand == null) return new ContextReturn(stringBuilder.ToString());
         if (ReflectionCache.HandPrefs != null)
         {
             try
@@ -92,7 +92,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
             }
             catch { }
         }
-        return stringBuilder.ToString();
+        return new ContextReturn(stringBuilder.ToString());
 
     }
 

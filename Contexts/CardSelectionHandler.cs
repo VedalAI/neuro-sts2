@@ -32,26 +32,26 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
     }
 
 
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
         stringBuilder.AppendLine("You need to select a card");
         var cardHolders = ctx.CardHolders;
-        if (cardHolders == null) return stringBuilder.ToString();
+        if (cardHolders == null) return new ContextReturn(stringBuilder.ToString());
         // Don't offer commands until the screen is fully initialized (_completionSource set)
         if (ctx.OverlayScreen != null)
         {
             var tcsField = ctx.OverlayScreen.GetType().GetField("_completionSource",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (tcsField != null && tcsField.GetValue(ctx.OverlayScreen) == null)
-                return stringBuilder.ToString();
+                return new ContextReturn(stringBuilder.ToString());
         }
         var cardModels = cardHolders.Select(x => x.CardModel);
         if (cardModels == null || !cardModels.Any())
-            return stringBuilder.ToString();
+            return new ContextReturn(stringBuilder.ToString());
         stringBuilder.AppendLine("The following cards are selectable:");
         stringBuilder.RepresentDeck(cardModels.Cast<CardModel>());
-        return stringBuilder.ToString();
+        return new ContextReturn(stringBuilder.ToString());
     }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {

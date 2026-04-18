@@ -90,14 +90,14 @@ public class GameOverHandler : IContextHandler<GameOverHandler.GameOverResult>
     }
 
 
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
         var history = RunManager.Instance?.History;
         if (history == null)
         {
             stringBuilder.AppendLine("You have lost the game");
-            return stringBuilder.ToString();
+            return new ContextReturn(stringBuilder.ToString());
         }
 
         stringBuilder.AppendLine($"You have {(history.Win ? "won" : "lost")} the game");
@@ -135,7 +135,7 @@ public class GameOverHandler : IContextHandler<GameOverHandler.GameOverResult>
             stringBuilder.AppendLine($"Deck size: {player.Deck.Count()}");
             stringBuilder.AppendLine($"Relic count: {player.Relics.Count()}");
         }
-        return stringBuilder.ToString();
+        return new ContextReturn(stringBuilder.ToString());
     }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {

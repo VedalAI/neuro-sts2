@@ -26,7 +26,7 @@ public class MapHandler : IContextHandler<MapHandler.Result>
     public ContextType Type => ContextType.Map;
 
     //TODO: Figure out how to best represent the paths. Like giving context where a choice can lead, i.e. shop or rest site
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder mapBuilder = new();
         mapBuilder.AppendLine($"# You are on the map about to travel somewhere, Act {ctx.RunState.CurrentActIndex + 1}");
@@ -36,7 +36,7 @@ public class MapHandler : IContextHandler<MapHandler.Result>
         {
             mapBuilder.AppendLine($"- [{coords.coord.row},{coords.coord.col}] {GetMapPointName(coords.PointType)}");
         }
-        return mapBuilder.ToString();
+        return new ContextReturn(mapBuilder.ToString());
     }
 
     public List<ConstructedAction> GetCommands(ContextInfo ctx)

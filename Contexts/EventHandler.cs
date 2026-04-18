@@ -28,13 +28,13 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
     public ContextType Type => ContextType.Event;
 
     //TODO: make this more robust. Context is a bit odd in some events
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         var eventRoom = ctx.EventRoom;
         var evt = eventRoom.LocalMutableEvent;
         if (evt == null)
         {
-            return $"You are in the Event: {eventRoom.CanonicalEvent.Title.GetUnformatedText()}";
+            return new ContextReturn($"You are in the Event: {eventRoom.CanonicalEvent.Title.GetUnformatedText()}");
         }
 
         StringBuilder eventBuilder = new();
@@ -85,7 +85,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
             }
         }
 
-        return eventBuilder.ToString();
+        return new ContextReturn(eventBuilder.ToString());
     }
 
     public Dictionary<string, object>? SerializeState(ContextInfo ctx)

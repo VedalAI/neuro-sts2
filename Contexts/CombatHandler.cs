@@ -39,14 +39,14 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
     public ContextType Type => ContextType.Combat;
     bool firstContext = true;
 
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
         var combatState = ctx.CombatState;
         stringBuilder.AppendLine("## You are in combat");
         if (combatState == null)
         {
-            return stringBuilder.ToString();
+            return new ContextReturn(stringBuilder.ToString());
         }
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var pcs = player.PlayerCombatState;
@@ -139,7 +139,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
             }
             stringBuilder.RepresentEvents(events);
         }
-        return stringBuilder.ToString();
+        return new ContextReturn(stringBuilder.ToString());
 
     }
 

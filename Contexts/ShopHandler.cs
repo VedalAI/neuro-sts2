@@ -26,20 +26,20 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
     }
     public ContextType Type => ContextType.Shop;
 
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
 
         if (!ctx.ShopIsOpen)
         {
             stringBuilder.AppendLine("You reached a shop");
-            return stringBuilder.ToString();
+            return new ContextReturn(stringBuilder.ToString());
         }
         var player = LocalContext.GetMe(ctx.RunState.Players);
         stringBuilder.AppendLine($"You are inside of a shop. You have {player!.Gold} gold to spend");
         stringBuilder.AppendLine("In the shop you can buy cards,relics or remove a card from your deck");
         stringBuilder.AppendLine("Once you are done with all your purchases you can leave the shop and proceed with your adventure");
-        return stringBuilder.ToString();
+        return new ContextReturn(stringBuilder.ToString());
     }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {

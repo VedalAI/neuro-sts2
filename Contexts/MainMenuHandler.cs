@@ -26,13 +26,13 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
     }
     public ContextType Type => ContextType.MainMenu;
 
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
         stringBuilder.Append("You are on the Main Menu of Slay the Spire 2, ");
         var sceneRoot = SceneHelper.GetSceneRoot();
         var mainMenu = sceneRoot != null ? UiHelper.FindFirst<NMainMenu>(sceneRoot) : null;
-        if (mainMenu == null) return stringBuilder.ToString();
+        if (mainMenu == null) return new ContextReturn(stringBuilder.ToString());
         var timelineButton = mainMenu.Get(NMainMenu.PropertyName._timelineButton).As<NMainMenuTextButton>();
         var notification = mainMenu.Get(NMainMenu.PropertyName._timelineNotificationDot).As<Control>();
 
@@ -44,7 +44,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
             stringBuilder.AppendLine("You have a already ongoing Run, you can choose to continue your last adventure or abandon it to start fresh with a new character");
         else
             stringBuilder.AppendLine("Start a new Run to select a Character and Start your Adventure! And Conquer the Spire");
-        return stringBuilder.ToString();
+        return new ContextReturn(stringBuilder.ToString());
     }
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
     {

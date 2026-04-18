@@ -120,7 +120,8 @@ public class NeuroIntegration : Node
         return;
       }
       lastWindow?.End();
-      lastWindow = ActionWindow.Create(this).SetContext(handler.GetContext(ctx));
+      var contextReturn = handler.GetContext(ctx);
+      lastWindow = ActionWindow.Create(this).SetContext(contextReturn.Message, contextReturn.Silent);
       var new_global_actions = new List<ConstructedAction>();
       foreach (var item in CommandsList)
       {

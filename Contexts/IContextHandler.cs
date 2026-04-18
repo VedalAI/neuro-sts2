@@ -8,11 +8,16 @@ using Sts2Agent.Utilities;
 
 namespace Sts2Agent.Contexts;
 
+public struct ContextReturn(string message, bool silent = false)
+{
+    public string Message = message;
+    public bool Silent = silent;
+}
 public interface IContextResult { }
 public interface IContextHandler
 {
     ContextType Type { get; }
-    string GetContext(ContextInfo ctx);
+    ContextReturn GetContext(ContextInfo ctx);
     List<ConstructedAction> GetCommands(ContextInfo ctx);
     ExecutionResult Internal_Validate(ConstructedAction action, ActionJData data, out object parsedData, ContextInfo ctx);
 

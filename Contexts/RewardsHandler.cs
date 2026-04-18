@@ -30,16 +30,16 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>
     }
     public ContextType Type => ContextType.Rewards;
 
-    public string GetContext(ContextInfo ctx)
+    public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
 
         var rewardsScreen = ctx.RewardsScreen;
-        if (rewardsScreen == null) return stringBuilder.ToString();
+        if (rewardsScreen == null) return new ContextReturn(stringBuilder.ToString());
         var buttons = GetEnabledRewardButtons(rewardsScreen);
         if (buttons.Count <= 0)
         {
-            return stringBuilder.ToString();
+            return new ContextReturn(stringBuilder.ToString());
         }
         stringBuilder.AppendLine("## You are on a Rewards screen");
         stringBuilder.AppendLine("The Following are the available rewards, You can choose as many as you want. The moment you use proceed the rest are discarded and you can't pick them anymore");
@@ -64,7 +64,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>
             if (button == null)
                 GameStabilityDetector.ResetWasStable(); // the Rewards screen on an event might not be populated yet.
         }
-        return stringBuilder.ToString();
+        return new ContextReturn(stringBuilder.ToString());
     }
 
     public List<ConstructedAction> GetCommands(ContextInfo ctx)
