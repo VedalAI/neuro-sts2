@@ -30,7 +30,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
   public ContextReturn GetContext(ContextInfo ctx)
   {
     StringBuilder stringBuilder = new();
-    stringBuilder.AppendLine("You are at the Timelines Event");
+    // stringBuilder.AppendLine("You are at the Timelines Event");
     if (UiHelper.FindFirst<NTimelineTutorial>(ctx.TimelineScreen) is NTimelineTutorial tutorial)
     {
       stringBuilder.AppendLine(TextHelper.StripBBCode(tutorial.Get(NTimelineTutorial.PropertyName._text).As<MegaRichTextLabel>().Text.AsSingleLine()));
@@ -39,7 +39,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
     if (tounlockEpochs.Count > 0)
     {
       var tounlock = tounlockEpochs.Where(x => x.State == EpochSlotState.Obtained);
-      stringBuilder.AppendLine($"You have {tounlock.Count()} epochs to unlocked");
+      // stringBuilder.AppendLine($"You have {tounlock.Count()} epochs to unlocked");
     }
     return new ContextReturn(stringBuilder.ToString());
   }
@@ -147,6 +147,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
 
     return ExecutionResult.Unstable("Unkown Action");
   }
+  //TODO: aggregate Epoch Information and send it to neuro when the Epoch is Fully unlocked with the rewards and the rest together as 1 context
   public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
   {
     await Task.Delay(1000);
