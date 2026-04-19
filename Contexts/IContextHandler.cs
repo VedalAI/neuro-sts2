@@ -50,3 +50,8 @@ public interface IContextHandler<T> : IContextHandler where T : class, new()
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, T parsedData, ContextInfo ctx);
     public Task<ExecutionResult?> TryExecute(ConstructedAction action, T ParsedData, ContextInfo ctx);
 }
+
+public interface IOnContextSwitch
+{
+    void OnContextSwitch(ContextType newContext);
+}

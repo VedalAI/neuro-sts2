@@ -68,11 +68,31 @@ public class NeuroIntegration : Node
     }
   }
 
+  public static void UnregisterActions(params string[] action_names)
+  {
+    if (Instance == null)
+    {
+      Plugin.LogError("Neuro Integration isn't Ready yet");
+      return;
+    }
+    var actions_to_remove = Instance.GlobalActions.Where((action) => action_names.Contains(action.Name)).ToArray();
+    NeuroActionHandler.UnregisterActions(actions_to_remove);
+    foreach (var action in actions_to_remove)
+    {
+      Instance.GlobalActions.Remove(action);
+    }
+  }
+
   public static void UnregisterAllActions()
   {
     if (Instance == null)
     {
       Plugin.LogError("Neuro Integration isn't Ready yet");
+      return;
+    }
+    if (Instance.GlobalActions.Count == 0)
+    {
+      // Plugin.LogDebug("No Global Actions to Unregister");
       return;
     }
     NeuroActionHandler.UnregisterActions(Instance.GlobalActions.ToArray());
@@ -111,7 +131,12 @@ public class NeuroIntegration : Node
       {
         SendContext($"These Events happened During a Context Switch:\n{stringBuilder}");
       }
-      OnContextSwitch?.Invoke();
+      var oldhandler = ActionExecutor.GetHandlers().GetValueOrDefault(lastContext);
+      if (oldhandler != null && oldhandler is IOnContextSwitch switchHandler)
+      {
+        switchHandler.OnContextSwitch(ctx.Type);
+        Plugin.LogDebug($"Context Switch: Called OnContextSwitch for {lastContext} -> {ctx.Type}");
+      }
       lastContext = ctx.Type;
     }
 
@@ -155,6 +180,7 @@ public class NeuroIntegration : Node
         if (!string.IsNullOrEmpty(contextReturn.Message))
           SendContext(contextReturn.Message, contextReturn.Silent);
         Plugin.LogDebug("Only one command without parameters, enqueuing directly");
+        UnregisterAllActions();
         return;
       }
       if (CommandsList.SkipActionWindow && !CommandsList.Commands.Any(cmd => cmd.HasSchema()) && CommandsList.Commands.Count <= 1)
@@ -166,16 +192,31 @@ public class NeuroIntegration : Node
       }
       lastWindow = ActionWindow.Create(this).SetContext(contextReturn.Message, contextReturn.Silent);
       var new_global_actions = new List<ConstructedAction>();
+      var hasNonPersistant = false;
       foreach (var item in CommandsList.Commands)
       {
         if (!item.Persistant_action)
+        {
+          hasNonPersistant = true;
           lastWindow.AddAction(item);
+        }
         else
         {
           if (GlobalActions.Find((action) => action.Name == item.Name) == null)
           {
             GlobalActions.Add(item);
             new_global_actions.Add(item);
+          }
+          else
+          {
+            //Check if the Schema's are the same, if not unregister the old one and register the new one, to prevent issues with changing parameters of global actions
+            var existing = GlobalActions.Find((action) => action.Name == item.Name);
+            if (existing != null && existing.HasSchema() && item.HasSchema() && existing.ToString() != item.ToString())
+            {
+              Plugin.LogWarning($"Global Action '{item.Name}' is being updated with a different schema, registering");
+              UnregisterAction(item.Name);
+              new_global_actions.Add(item);
+            }
           }
         }
       }
@@ -192,7 +233,8 @@ public class NeuroIntegration : Node
            WebsocketConnection.Instance!.Send(force);
          });
       }
-      lastWindow.Register();
+      if (hasNonPersistant)
+        lastWindow.Register();
 
     }
     else

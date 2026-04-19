@@ -62,11 +62,17 @@ public static class ActionExecutor
     public static void EnqueueAction(ConstructedAction constructedAction)
     {
         Plugin.LogDebug($"Enqueuing Action: {constructedAction.Name}");
-        if (constructedAction.Data == null)
+        constructedAction.Data ??= new();
+        if (enqueuedActions.Contains(constructedAction))
         {
-            constructedAction.Data = new();
+            Plugin.LogWarning($"Action: {constructedAction.Name} is already enqueued, skipping enqueue");
+            return;
         }
-        enqueuedActions.Enqueue(constructedAction);
+        else
+        {
+
+            enqueuedActions.Enqueue(constructedAction);
+        }
         GameStabilityDetector.ResetWasStable();
         GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
     }

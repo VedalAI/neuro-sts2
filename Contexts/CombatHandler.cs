@@ -28,7 +28,7 @@ using MegaCrit.Sts2.Core.Hooks;
 
 namespace Sts2Agent.Contexts;
 
-public class CombatHandler : IContextHandler<CombatHandler.Result>
+public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSwitch
 {
     public class Result : IContextResult
     {
@@ -47,6 +47,9 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
     readonly List<string> _projectedPotionsUsed = new();
     int _lastProjectedRound = -1;
     bool _isRevalidation = false;
+    // Actions invalidated by projected resource tracking that should not be re-registered
+    // until the action queue drains and fresh game state is available.
+    readonly HashSet<string> _invalidatedActions = new();
 
     public ContextReturn GetContext(ContextInfo ctx)
     {
@@ -155,6 +158,10 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
 
     public CommandReturn GetCommands(ContextInfo ctx)
     {
+        // Clear invalidated actions when the action queue has drained and game state is fresh
+        if (actionQueue.Count == 0)
+            _invalidatedActions.Clear();
+
         var commands = new List<ConstructedAction>();
         var cm = CombatManager.Instance;
         if (cm == null || !cm.IsPlayPhase || cm.PlayerActionsDisabled) return new CommandReturn();
@@ -207,7 +214,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
 #else
             foreach (var card in pcs.Hand.Cards.Where(x => x.CanPlay()).DistinctBy(x => x.Title))
             {
-                var action = new ConstructedAction($"play_card_{TextHelper.GetActionNameFor(card.Title)}", $"{TextHelper.GetCardDescriptionFor(card, PileType.Hand).AsSingleLine()}", persistant_action: true);
+                var actionName = $"play_card_{TextHelper.GetActionNameFor(card.Title)}";
+                if (_invalidatedActions.Contains(actionName))
+                    continue;
+
+                var action = new ConstructedAction(actionName, $"{TextHelper.GetCardDescriptionFor(card, PileType.Hand).AsSingleLine()}", persistant_action: true);
 
                 if (card.TargetType == TargetType.AnyEnemy)
                 {
@@ -228,7 +239,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
             }
             foreach (var potion in player.Potions)
             {
-                var action = new ConstructedAction($"use_potion_{potion.Title.GetActionName()}", $"{potion.DynamicDescription.AsSingleLine()}", persistant_action: true);
+                var actionName = $"use_potion_{potion.Title.GetActionName()}";
+                if (_invalidatedActions.Contains(actionName))
+                    continue;
+
+                var action = new ConstructedAction(actionName, $"{potion.DynamicDescription.AsSingleLine()}", persistant_action: true);
 
                 if (potion.TargetType == TargetType.AnyEnemy)
                 {
@@ -270,11 +285,17 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
 #else
             foreach (var card in pcs.Hand.Cards.Where((x) => x.CanPlay()).DistinctBy(x => x.Title))
             {
-                commands.Add(new($"play_card_{TextHelper.GetActionNameFor(card.Title)}", $"{TextHelper.GetCardDescriptionFor(card, PileType.Hand).AsSingleLine()}", persistant_action: true));
+                var actionName = $"play_card_{TextHelper.GetActionNameFor(card.Title)}";
+                if (_invalidatedActions.Contains(actionName))
+                    continue;
+                commands.Add(new(actionName, $"{TextHelper.GetCardDescriptionFor(card, PileType.Hand).AsSingleLine()}", persistant_action: true));
             }
             foreach (var potion in player.Potions)
             {
-                commands.Add(new($"use_potion_{potion.Title.GetActionName()}", $"{potion.DynamicDescription.AsSingleLine()}", persistant_action: true));
+                var actionName = $"use_potion_{potion.Title.GetActionName()}";
+                if (_invalidatedActions.Contains(actionName))
+                    continue;
+                commands.Add(new(actionName, $"{potion.DynamicDescription.AsSingleLine()}", persistant_action: true));
 
             }
 
@@ -294,7 +315,8 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         }
 #endif
 
-        commands.Add(new("end_turn", "Ends your current turn"));
+        if (!_invalidatedActions.Contains("end_turn"))
+            commands.Add(new("end_turn", "Ends your current turn", persistant_action: true));
 
 
         return new CommandReturn(commands, ForceWindow: false);
@@ -365,6 +387,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
             _projectedEnergyRemaining = pcs.Energy;
             _projectedStarsRemaining = pcs.Stars;
             _projectedPotionsUsed.Clear();
+            _invalidatedActions.Clear();
             _lastProjectedRound = currentRound;
         }
         else
@@ -469,11 +492,17 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
             }
         }
 
-        foreach (var name in toUnregister)
+        var actionsRemaining = globalActions.Select(a => a.Name).Except(toUnregister);
+        if (actionsRemaining.All(x => x == "end_turn"))
         {
-            Plugin.LogDebug($"Pre-invalidating action '{name}' (would be unplayable after '{currentAction.Name}')");
-            NeuroIntegration.UnregisterAction(name);
+            toUnregister.Add("end_turn");
         }
+
+        foreach (var name in toUnregister)
+            _invalidatedActions.Add(name);
+
+        NeuroIntegration.UnregisterActions(toUnregister.ToArray());
+
     }
     public ExecutionResult ValidatePotion(ConstructedAction action, ActionJData data, ref Result parsedData, ContextInfo ctx)
     {
@@ -687,6 +716,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
             Plugin.LogDebug(e.Message);
             return ExecutionResult.Failure("Playing the card threw");
         }
+        await Task.Delay(1000); // Small delay to make it a better viewing experience
         Plugin.Log($"Played card");
         return ExecutionResult.Success("Card played");
     }
@@ -700,11 +730,8 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         var cm = CombatManager.Instance;
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var roundNumber = player.Creature.CombatState.RoundNumber;
-        Callable.From(() =>
-        {
-            RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(
-                new MegaCrit.Sts2.Core.GameActions.EndPlayerTurnAction(player, roundNumber));
-        }).CallDeferred();
+        RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(
+            new MegaCrit.Sts2.Core.GameActions.EndPlayerTurnAction(player, roundNumber));
 
         Plugin.Log("Ended turn");
         firstContext = true;
@@ -762,4 +789,9 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         }
     }
 
+    public void OnContextSwitch(ContextType newContext)
+    {
+        actionQueue.Clear();
+        NeuroIntegration.UnregisterAllActions();
+    }
 }
