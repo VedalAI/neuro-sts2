@@ -245,7 +245,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
 
         // GameStabilityDetector.ResetWasStable();
         await GodotMainThread.ClickAsync(result.Button);
-        Plugin.Log($"Selected event option {result.Button.Name}");
+        Plugin.Log($"Selected event option {result.Button?.Name ?? "unknown"}");
         return ExecutionResult.Success("Event option selected");
     }
 

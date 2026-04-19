@@ -43,7 +43,8 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     var currentSelection = UiHelper.FindAll<NDivinationButton>(ctx.CrystalSphereScreen).FirstOrDefault(x => x.Get(NDivinationButton.PropertyName._outline).As<Control>().Visible);
     if (currentSelection != null)
     {
-      stringBuilder.AppendLine($"# Currently you have {currentSelection.Get(NDivinationButton.PropertyName._label).As<MegaLabel>().Text} selected");
+      var selectionLabel = currentSelection.Get(NDivinationButton.PropertyName._label).As<MegaLabel>();
+      stringBuilder.AppendLine($"# Currently you have {selectionLabel?.Text ?? "unknown"} selected");
     }
     return new ContextReturn(stringBuilder.ToString());
   }
@@ -74,7 +75,7 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
 
       var maxX = cells.MaxBy(x => x.Entity.X)?.Entity?.X;
       var maxY = cells.MaxBy(x => x.Entity.Y)?.Entity?.Y;
-      commands.Add(new($"reveal_cell", "Reveals a cell at the Selected position between {minX.X},{minY.Y} and {maxX.X},{maxY.Y}, The selected position needs to be inside the sphere", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+      commands.Add(new($"reveal_cell", $"Reveals a cell at the Selected position between {minX},{minY} and {maxX},{maxY}, The selected position needs to be inside the sphere", QJS.WrapObject(new Dictionary<string, JsonSchema>()
       {
         ["x"] = new()
         {

@@ -160,7 +160,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
     if (action.Name == "unlock_epoch")
     {
       await GodotMainThread.ClickAsync(result.EpochButton);
-      NeuroIntegration.SendContext($"Unlocked Epoch: {TextHelper.StripBBCode(result.EpochButton.model.Description)}");
+      NeuroIntegration.SendContext($"Unlocked Epoch: {TextHelper.StripBBCode(result.EpochButton.model?.Description ?? "")}");
       await Task.Delay(1000);// wait for the screen to fade
       return ExecutionResult.Success();
     }

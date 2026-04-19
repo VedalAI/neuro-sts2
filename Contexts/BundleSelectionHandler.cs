@@ -133,12 +133,12 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Res
             if (overlayNode == null || !GodotObject.IsInstanceValid(overlayNode)
                 || NOverlayStack.Instance?.Peek() != overlayScreen)
             {
-                Plugin.Log($"Selected bundle {result.SelectedBundle.Name}");
+                Plugin.Log($"Selected bundle {result.SelectedBundle?.Name ?? "unknown"}");
                 return ExecutionResult.Success("Bundle selected");
             }
         }
 
-        Plugin.Log($"Selected bundle {result.SelectedBundle.Name} (overlay may still be closing)");
+        Plugin.Log($"Selected bundle {result.SelectedBundle?.Name ?? "unknown"} (overlay may still be closing)");
         return ExecutionResult.Success("Bundle selected");
     }
 }
