@@ -40,6 +40,7 @@ public class ConstructedAction(string name, string description, JsonSchema? sche
 
     protected override ExecutionResult ValidateUnsafe(ActionJData actionData, out object? parsedData)
     {
+        Data = actionData;
         return ActionExecutor.Validate(this, actionData, out parsedData);
     }
 

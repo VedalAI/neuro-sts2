@@ -24,6 +24,7 @@ using System.Collections.Immutable;
 using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Localization;
+using MegaCrit.Sts2.Core.Hooks;
 
 namespace Sts2Agent.Contexts;
 
@@ -37,6 +38,15 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
     }
     public ContextType Type => ContextType.Combat;
     bool firstContext = true;
+    readonly ActionQueue actionQueue = new();
+
+    // Projected resource tracking for queued-but-not-yet-executed actions.
+    // Synced to actual state on new rounds or when the action queue drains.
+    int _projectedEnergyRemaining = int.MaxValue;
+    int _projectedStarsRemaining = int.MaxValue;
+    readonly List<string> _projectedPotionsUsed = new();
+    int _lastProjectedRound = -1;
+    bool _isRevalidation = false;
 
     public ContextReturn GetContext(ContextInfo ctx)
     {
@@ -197,7 +207,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
 #else
             foreach (var card in pcs.Hand.Cards.Where(x => x.CanPlay()).DistinctBy(x => x.Title))
             {
-                var action = new ConstructedAction($"play_card_{TextHelper.GetActionNameFor(card.Title)}", $"{TextHelper.GetCardDescriptionFor(card, PileType.Hand).AsSingleLine()}");
+                var action = new ConstructedAction($"play_card_{TextHelper.GetActionNameFor(card.Title)}", $"{TextHelper.GetCardDescriptionFor(card, PileType.Hand).AsSingleLine()}", persistant_action: true);
 
                 if (card.TargetType == TargetType.AnyEnemy)
                 {
@@ -218,7 +228,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
             }
             foreach (var potion in player.Potions)
             {
-                var action = new ConstructedAction($"use_potion_{potion.Title.GetActionName()}", $"{potion.DynamicDescription.AsSingleLine()}");
+                var action = new ConstructedAction($"use_potion_{potion.Title.GetActionName()}", $"{potion.DynamicDescription.AsSingleLine()}", persistant_action: true);
 
                 if (potion.TargetType == TargetType.AnyEnemy)
                 {
@@ -260,11 +270,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
 #else
             foreach (var card in pcs.Hand.Cards.Where((x) => x.CanPlay()).DistinctBy(x => x.Title))
             {
-                commands.Add(new($"play_card_{TextHelper.GetActionNameFor(card.Title)}", $"{TextHelper.GetCardDescriptionFor(card, PileType.Hand).AsSingleLine()}"));
+                commands.Add(new($"play_card_{TextHelper.GetActionNameFor(card.Title)}", $"{TextHelper.GetCardDescriptionFor(card, PileType.Hand).AsSingleLine()}", persistant_action: true));
             }
             foreach (var potion in player.Potions)
             {
-                commands.Add(new($"use_potion_{potion.Title.GetActionName()}", $"{potion.DynamicDescription.AsSingleLine()}"));
+                commands.Add(new($"use_potion_{potion.Title.GetActionName()}", $"{potion.DynamicDescription.AsSingleLine()}", persistant_action: true));
 
             }
 
@@ -287,7 +297,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         commands.Add(new("end_turn", "Ends your current turn"));
 
 
-        return new CommandReturn(commands);
+        return new CommandReturn(commands, ForceWindow: false);
     }
 
 
@@ -305,7 +315,10 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         if (action.Name.StartsWith("play_card_"))
 #endif
         {
-            return ValidateSingleCard(action, data, ref parsedData, ctx);
+            var result = ValidateSingleCard(action, data, ref parsedData, ctx);
+            if (result.Successful && !_isRevalidation)
+                InvalidateFutureActions(action, parsedData, player, ctx);
+            return result;
         }
 #if !ALTERNATIVE_ACTIONS
         else if (action.Name == "use_potion" || action.Name == "use_target_potion")
@@ -313,7 +326,10 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
         else if (action.Name.StartsWith("use_potion_"))
 #endif
         {
-            return ValidatePotion(action, data, ref parsedData, ctx);
+            var result = ValidatePotion(action, data, ref parsedData, ctx);
+            if (result.Successful && !_isRevalidation)
+                InvalidateFutureActions(action, parsedData, player, ctx);
+            return result;
         }
         else if (action.Name == "end_turn")
         {
@@ -322,6 +338,142 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
             return ExecutionResult.Success();
         }
         return ExecutionResult.Unstable("Unkown Action");
+    }
+
+    /// <summary>
+    /// After validating the current action, update projected resource state and unregister
+    /// any persistent actions that would become unplayable.
+    /// </summary>
+    private void InvalidateFutureActions(ConstructedAction currentAction, Result parsedData, Player player, ContextInfo ctx)
+    {
+        var instance = NeuroIntegration.Instance;
+        if (instance == null) return;
+
+        var pcs = player.PlayerCombatState;
+        if (pcs == null) return;
+
+        var globalActions = instance.GlobalActions;
+        if (globalActions.Count == 0) return;
+
+        var combatState = ctx.CombatState;
+        int currentRound = combatState?.RoundNumber ?? -1;
+        bool canPayEnergyWithStars = combatState != null && Hook.ShouldPayExcessEnergyCostWithStars(combatState, player);
+
+        // Reset projected state on new round or when the action queue has fully drained
+        if (currentRound != _lastProjectedRound || actionQueue.Count == 0)
+        {
+            _projectedEnergyRemaining = pcs.Energy;
+            _projectedStarsRemaining = pcs.Stars;
+            _projectedPotionsUsed.Clear();
+            _lastProjectedRound = currentRound;
+        }
+        else
+        {
+            // Within the same round, sync down to actual state to avoid over-counting
+            // after previously queued actions have executed and reduced real resources
+            _projectedEnergyRemaining = Math.Min(_projectedEnergyRemaining, pcs.Energy);
+            _projectedStarsRemaining = Math.Min(_projectedStarsRemaining, pcs.Stars);
+        }
+
+        // Subtract the current action's resource cost from projected state
+        if (parsedData.Card != null)
+        {
+            var card = parsedData.Card;
+            if (card.EnergyCost.CostsX)
+                _projectedEnergyRemaining = 0;
+            else
+            {
+                int energyCost = Math.Max(0, card.EnergyCost.GetWithModifiers(CostModifiers.All));
+                int starCost = Math.Max(0, card.GetStarCostWithModifiers());
+
+                if (energyCost > _projectedEnergyRemaining && canPayEnergyWithStars)
+                {
+                    starCost += (energyCost - _projectedEnergyRemaining) * 2;
+                    energyCost = _projectedEnergyRemaining;
+                }
+
+                _projectedEnergyRemaining = Math.Max(0, _projectedEnergyRemaining - energyCost);
+                _projectedStarsRemaining = Math.Max(0, _projectedStarsRemaining - starCost);
+            }
+
+            if (card.HasStarCostX)
+                _projectedStarsRemaining = 0;
+        }
+
+        if (parsedData.Potion != null)
+            _projectedPotionsUsed.Add(currentAction.Name);
+
+        // Build potion availability: actual count minus projected uses
+        Dictionary<string, int>? potionAvailability = null;
+        if (_projectedPotionsUsed.Count > 0)
+        {
+            potionAvailability = new Dictionary<string, int>();
+            foreach (var p in player.Potions)
+            {
+                var key = $"use_potion_{p.Title.GetActionName()}";
+                potionAvailability[key] = potionAvailability.GetValueOrDefault(key, 0) + 1;
+            }
+            foreach (var usedName in _projectedPotionsUsed)
+            {
+                if (potionAvailability.ContainsKey(usedName))
+                    potionAvailability[usedName]--;
+            }
+        }
+
+        var toUnregister = new List<string>();
+        foreach (var otherAction in globalActions)
+        {
+            if (otherAction.Name.StartsWith("play_card_"))
+            {
+                var cardIndex = otherAction.Name.Replace("play_card_", "");
+                var hand = pcs.Hand.Cards;
+
+                // When checking the same card name being played, exclude the exact instance
+                // being consumed so we only find remaining copies
+                var candidates = hand
+                    .Where(x => TextHelper.GetActionNameFor(x.Title) == cardIndex && x.CanPlay());
+                if (parsedData.Card != null && otherAction.Name == currentAction.Name)
+                    candidates = candidates.Where(x => x != parsedData.Card);
+
+                var otherCard = candidates
+                    .OrderBy(x => x.EnergyCost.GetAmountToSpend() + x.CurrentStarCost)
+                    .FirstOrDefault();
+
+                if (otherCard == null)
+                {
+                    toUnregister.Add(otherAction.Name);
+                    continue;
+                }
+
+                // X-cost cards always have effective cost 0 for playability (GetWithModifiers returns 0)
+                int otherEnergy = Math.Max(0, otherCard.EnergyCost.GetWithModifiers(CostModifiers.All));
+                int otherStars = otherCard.HasStarCostX ? 0 : Math.Max(0, otherCard.GetStarCostWithModifiers());
+
+                if (otherEnergy > _projectedEnergyRemaining && canPayEnergyWithStars)
+                {
+                    otherStars += (otherEnergy - _projectedEnergyRemaining) * 2;
+                    otherEnergy = _projectedEnergyRemaining;
+                }
+
+                if (otherEnergy > _projectedEnergyRemaining || otherStars > _projectedStarsRemaining)
+                {
+                    toUnregister.Add(otherAction.Name);
+                }
+            }
+            else if (otherAction.Name.StartsWith("use_potion_") && potionAvailability != null)
+            {
+                if (potionAvailability.GetValueOrDefault(otherAction.Name, 0) <= 0)
+                {
+                    toUnregister.Add(otherAction.Name);
+                }
+            }
+        }
+
+        foreach (var name in toUnregister)
+        {
+            Plugin.LogDebug($"Pre-invalidating action '{name}' (would be unplayable after '{currentAction.Name}')");
+            NeuroIntegration.UnregisterAction(name);
+        }
     }
     public ExecutionResult ValidatePotion(ConstructedAction action, ActionJData data, ref Result parsedData, ContextInfo ctx)
     {
@@ -449,32 +601,72 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
     public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
     {
         firstContext = false;
+
+        // Wait for our turn in the queue
+        var queueResult = await actionQueue.GetExecution();
+        if (!queueResult.Successful)
+        {
+            Plugin.LogDebug($"ActionQueue: action '{action.Name}' was rejected or cancelled: {queueResult.Message}");
+            return queueResult;
+        }
+
+        // Revalidate with fresh game state — things may have changed while waiting
+        var freshCtx = GameContext.Resolve();
+        if (freshCtx == null || freshCtx.Type != ContextType.Combat)
+        {
+            Plugin.LogDebug($"ActionQueue: context changed while waiting for '{action.Name}'");
+            actionQueue.ActionFinished();
+            return ExecutionResult.Failure("Context changed, no longer in combat");
+        }
+
+        var freshResult = new Result();
+        _isRevalidation = true;
+        var revalidation = Validate(action, action.Data, freshResult, freshCtx);
+        _isRevalidation = false;
+        if (!revalidation.Successful)
+        {
+            Plugin.LogDebug($"ActionQueue: action '{action.Name}' failed revalidation: {revalidation.Message}");
+            actionQueue.ActionFinished();
+            return revalidation;
+        }
+
+        actionQueue.MarkExecuting();
+
+        try
+        {
 #if !ALTERNATIVE_ACTIONS
-        return action.Name switch
-        {
-            "play_enemy_target_card" or "play_ally_target_card" or "play_card" => await PlayCard(result, ctx),
-            "end_turn" => EndTurn(ctx),
-            "use_potion" or "use_target_potion" => UsePotion(result, ctx),
-            _ => null
-        };
+            var execResult = action.Name switch
+            {
+                "play_enemy_target_card" or "play_ally_target_card" or "play_card" => await PlayCard(freshResult, freshCtx),
+                "end_turn" => await EndTurn(freshCtx),
+                "use_potion" or "use_target_potion" => UsePotion(freshResult, freshCtx),
+                _ => null
+            };
 #else
-        if (action.Name.StartsWith("play_card"))
-        {
-            return await PlayCard(result, ctx);
-        }
-        else if (action.Name.StartsWith("use_potion"))
-        {
-            return UsePotion(result, ctx);
-        }
-        else if (action.Name == "end_turn")
-        {
-            return await EndTurn(ctx);
-        }
-        else
-        {
-            return null;
-        }
+            ExecutionResult? execResult;
+            if (action.Name.StartsWith("play_card"))
+            {
+                execResult = await PlayCard(freshResult, freshCtx);
+            }
+            else if (action.Name.StartsWith("use_potion"))
+            {
+                execResult = UsePotion(freshResult, freshCtx);
+            }
+            else if (action.Name == "end_turn")
+            {
+                execResult = await EndTurn(freshCtx);
+            }
+            else
+            {
+                execResult = null;
+            }
 #endif
+            return execResult;
+        }
+        finally
+        {
+            actionQueue.ActionFinished();
+        }
     }
 
     private async Task<ExecutionResult> PlayCard(Result root, ContextInfo ctx)
@@ -501,6 +693,10 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
 
     private async Task<ExecutionResult> EndTurn(ContextInfo ctx)
     {
+        // Ending the turn invalidates any remaining queued actions
+        actionQueue.Clear();
+        NeuroIntegration.UnregisterAllActions();
+
         var cm = CombatManager.Instance;
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var roundNumber = player.Creature.CombatState.RoundNumber;
@@ -509,7 +705,6 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>
             RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(
                 new MegaCrit.Sts2.Core.GameActions.EndPlayerTurnAction(player, roundNumber));
         }).CallDeferred();
-        // await Task.Delay(500);
 
         Plugin.Log("Ended turn");
         firstContext = true;

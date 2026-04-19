@@ -6,6 +6,7 @@ using Godot;
 using MegaCrit.Sts2.Core.Logging;
 using NeuroSdk.Actions;
 using NeuroSdk.Messages.Outgoing;
+using NeuroSdk.Websocket;
 using Sts2Agent;
 using Sts2Agent.Contexts;
 using Sts2Agent.Utilities;
@@ -67,6 +68,17 @@ public class NeuroIntegration : Node
     }
   }
 
+  public static void UnregisterAllActions()
+  {
+    if (Instance == null)
+    {
+      Plugin.LogError("Neuro Integration isn't Ready yet");
+      return;
+    }
+    NeuroActionHandler.UnregisterActions(Instance.GlobalActions.ToArray());
+    Instance.GlobalActions.Clear();
+  }
+
   /// <summary>
   /// Simple Wrapper for NeuroSdk.Messages.Outgoing.Context to make namespace collisions not happen when importing Context.
   /// </summary>
@@ -78,6 +90,7 @@ public class NeuroIntegration : Node
   }
 
   ContextType lastContext = ContextType.Unknown;
+  public static Action OnContextSwitch;
 
   public void HandleDecisionPoint()
   {
@@ -98,6 +111,7 @@ public class NeuroIntegration : Node
       {
         SendContext($"These Events happened During a Context Switch:\n{stringBuilder}");
       }
+      OnContextSwitch?.Invoke();
       lastContext = ctx.Type;
     }
 
@@ -124,6 +138,7 @@ public class NeuroIntegration : Node
     if (handler.GetCommands(ctx) is CommandReturn CommandsList)
     {
       var contextReturn = handler.GetContext(ctx);
+      lastWindow?.End();
       if (CommandsList.Commands.Count == 0)
       {
         if (!string.IsNullOrEmpty(contextReturn.Message))
@@ -149,7 +164,6 @@ public class NeuroIntegration : Node
         Plugin.LogDebug("Context Handler requested to Skip, not sending Action Window");
         return;
       }
-      lastWindow?.End();
       lastWindow = ActionWindow.Create(this).SetContext(contextReturn.Message, contextReturn.Silent);
       var new_global_actions = new List<ConstructedAction>();
       foreach (var item in CommandsList.Commands)
@@ -166,8 +180,20 @@ public class NeuroIntegration : Node
         }
       }
       NeuroActionHandler.RegisterActions(new_global_actions);
-      lastWindow.SetForce(1, "It's your Turn please do an Action", null);
+      if (CommandsList.ForceActionWindow)
+        lastWindow.SetForce(1, "It's your Turn please do an Action", null);
+      else
+      {
+        // Force an action for every action
+        var force = new ActionsForce("Please do an Action", null, true, ActionsForce.Priority.Low, CommandsList.Commands);
+        GodotMainThread.RunAsync(async () =>
+         {
+           await Task.Delay(1000);
+           WebsocketConnection.Instance!.Send(force);
+         });
+      }
       lastWindow.Register();
+
     }
     else
     {
