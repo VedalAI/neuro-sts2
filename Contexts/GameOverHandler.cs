@@ -1,6 +1,6 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
 using MegaCrit.Sts2.Core.AutoSlay.Helpers;
@@ -32,110 +32,9 @@ public class GameOverHandler : IContextHandler<GameOverHandler.GameOverResult>
         return Phase.Continue;
     }
 
-    public Dictionary<string, object>? SerializeState(ContextInfo ctx)
-    {
-        var result = new Dictionary<string, object>();
-
-        var history = RunManager.Instance?.History;
-        if (history == null)
-        {
-            result["victory"] = false;
-            return result;
-        }
-
-        result["victory"] = history.Win;
-        result["seed"] = history.Seed;
-        result["ascension"] = history.Ascension;
-        result["run_time"] = history.RunTime;
-        result["floor_reached"] = history.MapPointHistory.Sum(act => act.Count);
-
-        if (!history.Win)
-        {
-            if (history.KilledByEncounter != ModelId.none)
-            {
-                var encounter = ModelDb.GetByIdOrNull<EncounterModel>(history.KilledByEncounter);
-                result["killed_by"] = encounter != null
-                    ? TextHelper.SafeLocString(() => encounter.Title)
-                    : history.KilledByEncounter.ToString();
-            }
-            else if (history.KilledByEvent != ModelId.none)
-            {
-                var evt = ModelDb.GetByIdOrNull<EventModel>(history.KilledByEvent);
-                result["killed_by"] = evt != null
-                    ? TextHelper.SafeLocString(() => evt.Title)
-                    : history.KilledByEvent.ToString();
-            }
-        }
-
-        var runState = RunManager.Instance?.DebugOnlyGetState();
-        if (runState != null)
-        {
-            result["score"] = ScoreUtility.CalculateScore(runState, history.Win);
-        }
-
-        if (history.Players.Count > 0)
-        {
-            var player = (LocalContext.NetId.HasValue
-                ? history.Players.FirstOrDefault(p => p.Id == LocalContext.NetId.Value)
-                : null) ?? history.Players[0];
-            var charModel = ModelDb.GetByIdOrNull<CharacterModel>(player.Character);
-            result["character"] = charModel != null
-                ? TextHelper.SafeLocString(() => charModel.Title)
-                : player.Character.ToString();
-            result["deck_size"] = player.Deck.Count();
-            result["relic_count"] = player.Relics.Count();
-        }
-
-        return result;
-    }
-
-
     public ContextReturn GetContext(ContextInfo ctx)
     {
-        StringBuilder stringBuilder = new();
-        var history = RunManager.Instance?.History;
-        if (history == null)
-        {
-            stringBuilder.AppendLine("You have lost the game");
-            return new ContextReturn(stringBuilder.ToString());
-        }
-
-        stringBuilder.AppendLine($"You have {(history.Win ? "won" : "lost")} the game");
-        stringBuilder.AppendLine($"Ascension: {history.Ascension}");
-        stringBuilder.AppendLine($"Run time: {history.RunTime}");
-        stringBuilder.AppendLine($"Floor reached: {history.MapPointHistory.Sum(act => act.Count)}");
-
-        if (!history.Win)
-        {
-            if (history.KilledByEncounter != ModelId.none)
-            {
-                var encounter = ModelDb.GetByIdOrNull<EncounterModel>(history.KilledByEncounter);
-                stringBuilder.AppendLine($"You were killed by {TextHelper.SafeLocString(() => encounter?.Title)}");
-            }
-            else if (history.KilledByEvent != ModelId.none)
-            {
-                var evt = ModelDb.GetByIdOrNull<EventModel>(history.KilledByEvent);
-                stringBuilder.AppendLine($"You were killed by {TextHelper.SafeLocString(() => evt?.Title)}");
-            }
-        }
-
-        var runState = RunManager.Instance?.DebugOnlyGetState();
-        if (runState != null)
-        {
-            stringBuilder.AppendLine($"Score: {ScoreUtility.CalculateScore(runState, history.Win)}");
-        }
-
-        if (history.Players.Count > 0)
-        {
-            var player = (LocalContext.NetId.HasValue
-                ? history.Players.FirstOrDefault(p => p.Id == LocalContext.NetId.Value)
-                : null) ?? history.Players[0];
-            var charModel = ModelDb.GetByIdOrNull<CharacterModel>(player.Character);
-            stringBuilder.AppendLine($"Character: {(charModel != null ? TextHelper.SafeLocString(() => charModel.Title) : player.Character)}");
-            stringBuilder.AppendLine($"Deck size: {player.Deck.Count()}");
-            stringBuilder.AppendLine($"Relic count: {player.Relics.Count()}");
-        }
-        return new ContextReturn(stringBuilder.ToString());
+        return new ContextReturn(string.Empty, silent: true);
     }
     public CommandReturn GetCommands(ContextInfo ctx)
     {
@@ -206,9 +105,111 @@ public class GameOverHandler : IContextHandler<GameOverHandler.GameOverResult>
             if (mainMenuBtn == null)
                 return ExecutionResult.Failure("Main menu button not found");
 
+            NeuroIntegration.SendContext(BuildGameOverContext());
             await GodotMainThread.ClickAsync(mainMenuBtn);
             Plugin.Log("Clicked return to main menu on game over screen");
             return ExecutionResult.Success("Returning to main menu");
         }
+    }
+
+    private static string BuildGameOverContext()
+    {
+        var history = RunManager.Instance?.History;
+        if (history == null)
+        {
+            return "## Run Over\nThe game over screen is open, but the run history is unavailable.";
+        }
+
+        StringBuilder stringBuilder = new();
+        stringBuilder.AppendLine(history.Win ? "## Victory" : "## Defeat");
+        stringBuilder.AppendLine(GetOutcomeSentence(history));
+        stringBuilder.AppendLine();
+        stringBuilder.AppendLine("## Run Summary");
+        stringBuilder.AppendLine($"- **Ascension:** {history.Ascension}");
+        stringBuilder.AppendLine($"- **Run time:** {FormatRunTime(history.RunTime)}");
+        stringBuilder.AppendLine($"- **Floor reached:** {history.MapPointHistory.Sum(act => act.Count)}");
+
+        string? causeOfEnd = GetCauseOfEnd(history);
+        if (!string.IsNullOrWhiteSpace(causeOfEnd))
+        {
+            string label = history.Win ? "Final encounter" : "Killed by";
+            stringBuilder.AppendLine($"- **{label}:** {causeOfEnd}");
+        }
+
+        var runState = RunManager.Instance?.DebugOnlyGetState();
+        if (runState != null)
+        {
+            stringBuilder.AppendLine($"- **Score:** {ScoreUtility.CalculateScore(runState, history.Win)}");
+        }
+
+        var players = GetOrderedPlayers(history).ToList();
+        if (players.Count > 0)
+        {
+            stringBuilder.AppendLine();
+            stringBuilder.AppendLine(players.Count == 1 ? "## Character" : "## Party");
+            foreach (var player in players)
+            {
+                string localSuffix = LocalContext.NetId.HasValue && player.Id == LocalContext.NetId.Value ? " *(you)*" : "";
+                stringBuilder.AppendLine($"- **{GetCharacterName(player)}**{localSuffix} - deck size {player.Deck.Count()}, relic count {player.Relics.Count()}");
+            }
+        }
+
+        return stringBuilder.ToString().TrimEnd();
+    }
+
+    private static IEnumerable<RunHistoryPlayer> GetOrderedPlayers(RunHistory history)
+    {
+        return LocalContext.NetId.HasValue
+            ? history.Players.OrderByDescending(player => player.Id == LocalContext.NetId.Value).ThenBy(player => player.Id)
+            : history.Players.OrderBy(player => player.Id);
+    }
+
+    private static string GetCharacterName(RunHistoryPlayer player)
+    {
+        var character = ModelDb.GetByIdOrNull<CharacterModel>(player.Character);
+        return character != null
+            ? TextHelper.SafeLocString(() => character.Title)
+            : player.Character.ToString();
+    }
+
+    private static string? GetCauseOfEnd(RunHistory history)
+    {
+        if (history.KilledByEncounter != ModelId.none)
+        {
+            var encounter = ModelDb.GetByIdOrNull<EncounterModel>(history.KilledByEncounter);
+            return encounter != null
+                ? TextHelper.SafeLocString(() => encounter.Title)
+                : history.KilledByEncounter.ToString();
+        }
+
+        if (history.KilledByEvent != ModelId.none)
+        {
+            var evt = ModelDb.GetByIdOrNull<EventModel>(history.KilledByEvent);
+            return evt != null
+                ? TextHelper.SafeLocString(() => evt.Title)
+                : history.KilledByEvent.ToString();
+        }
+
+        return null;
+    }
+
+    private static string GetOutcomeSentence(RunHistory history)
+    {
+        if (history.WasAbandoned)
+        {
+            return "The run was abandoned.";
+        }
+
+        return history.Win
+            ? "The run ended in victory."
+            : "The run ended in defeat.";
+    }
+
+    private static string FormatRunTime(float runTimeSeconds)
+    {
+        var duration = TimeSpan.FromSeconds(Math.Max(0, runTimeSeconds));
+        return duration.TotalHours >= 1
+            ? duration.ToString(@"h\:mm\:ss")
+            : duration.ToString(@"mm\:ss");
     }
 }
