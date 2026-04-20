@@ -171,6 +171,7 @@ public static class TreasureRoomAutoPatch
                     break;
                 await Task.Delay(500);
             }
+            EventLog.DrainAll();
             NeuroIntegration.SendContext(stringBuilder.ToString());
 
             Plugin.LogDebug("Treasure room: auto-open complete");
