@@ -737,8 +737,16 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             actionQueue.ActionFinished();
             if (action.Name != "end_turn") // Don't send a new context after ending the turn, we'll get a new one when the next combat round starts
             {
-                var context = getContext(freshCtx, afterPlayed: true);
-                NeuroIntegration.SendContext(context.Message, context.Silent);
+                var freshContext = GameContext.Resolve();
+                if (freshContext == null || freshContext.Type != ContextType.Combat)
+                {
+                    Plugin.LogDebug($"Not sending context after '{action.Name}' because context changed");
+                }
+                else
+                {
+                    var context = getContext(freshCtx, afterPlayed: true);
+                    NeuroIntegration.SendContext(context.Message, context.Silent);
+                }
             }
         }
     }
