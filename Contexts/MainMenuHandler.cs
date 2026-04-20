@@ -53,7 +53,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
         else
         {
 
-            stringBuilder.AppendLine("Select a Character, Start your Adventure! And Conquer the Spire");
+            // stringBuilder.AppendLine("Select a Character, Start your Adventure! And Conquer the Spire");
             var spButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton");
             if (spButton != null && spButton.IsEnabled)
             {

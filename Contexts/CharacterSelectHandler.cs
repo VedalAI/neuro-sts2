@@ -24,20 +24,19 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
         internal NCharacterSelectButton SelectedCharacter;
         internal NConfirmButton EmbarkButton;
     }
-    private static readonly FieldInfo? SelectedButtonField =
-        typeof(NCharacterSelectScreen).GetField("_selectedButton", BindingFlags.NonPublic | BindingFlags.Instance);
 
     public ContextType Type => ContextType.CharacterSelect;
 
     public ContextReturn GetContext(ContextInfo ctx)
     {
-        StringBuilder starting_character = new();
+        StringBuilder stringBuilder = new();
         var first_character = ctx.CharacterButtons!.FirstOrDefault(c => c.IsSelected);
         first_character ??= ctx.CharacterButtons!.First();
-        starting_character.AppendLine($"# Currently Selected Character is: {TextHelper.StripBBCode(first_character.Character.Title.GetFormattedText())}");
-        starting_character.RepresentStartingCharacter(first_character.Character);
+        stringBuilder.AppendLine("# Select a Character and Embark on your Adventure to conquer the Spire!");
+        stringBuilder.AppendLine($"# Currently Selected Character is: {TextHelper.StripBBCode(first_character.Character.Title.GetFormattedText())}");
+        stringBuilder.RepresentStartingCharacter(first_character.Character);
 
-        return new ContextReturn(starting_character.ToString());
+        return new ContextReturn(stringBuilder.ToString());
     }
 
     public CommandReturn GetCommands(ContextInfo ctx)
