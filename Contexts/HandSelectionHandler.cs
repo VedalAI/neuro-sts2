@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.Combat;
@@ -25,60 +25,10 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
     }
     public ContextType Type => ContextType.HandSelection;
 
-    public Dictionary<string, object>? SerializeState(ContextInfo ctx)
-    {
-        var hand = ctx.Hand;
-        if (hand == null) return null;
-
-        var overlay = new Dictionary<string, object>
-        {
-            ["type"] = "hand_select"
-        };
-
-        if (ReflectionCache.HandPrefs != null)
-        {
-            try
-            {
-                dynamic prefs = ReflectionCache.HandPrefs.GetValue(hand)!;
-                overlay["prompt"] = TextHelper.StripBBCode(
-                    ((MegaCrit.Sts2.Core.Localization.LocString)prefs.Prompt).GetFormattedText());
-                overlay["minSelect"] = (int)prefs.MinSelect;
-                overlay["maxSelect"] = (int)prefs.MaxSelect;
-            }
-            catch { }
-        }
-
-        if (ReflectionCache.HandSelectedCards != null)
-        {
-            try
-            {
-                var selected = (List<CardModel>)ReflectionCache.HandSelectedCards.GetValue(hand)!;
-                overlay["selectedCount"] = selected.Count;
-            }
-            catch { }
-        }
-
-        overlay["cards"] = GetVisibleHolders(hand)
-            .Select((h, i) =>
-            {
-                var card = h.CardNode!.Model;
-                return new Dictionary<string, object>
-                {
-                    ["index"] = i,
-                    ["name"] = card.Title.ToString(),
-                    ["description"] = TextHelper.GetCardDescription(card)
-                };
-            })
-            .ToList();
-
-        return overlay;
-    }
-
-
     public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
-        stringBuilder.AppendLine("You need to Select Cards from your hand.");
+        stringBuilder.AppendLine("## Select Cards from Your Hand");
         var hand = ctx.Hand;
         if (hand == null) return new ContextReturn(stringBuilder.ToString());
         if (ReflectionCache.HandPrefs != null)
@@ -88,9 +38,17 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
                 dynamic prefs = ReflectionCache.HandPrefs.GetValue(hand)!;
                 stringBuilder.AppendLine(TextHelper.StripBBCode(
                     ((MegaCrit.Sts2.Core.Localization.LocString)prefs.Prompt).GetFormattedText()));
-                stringBuilder.AppendLine(prefs.MinSelect != prefs.MaxSelect ? $"Select {prefs.MinSelect} up to {prefs.MinSelect} cards" : $"Select {prefs.MaxSelect} card");
+                stringBuilder.AppendLine(prefs.MinSelect != prefs.MaxSelect ? $"Select {prefs.MinSelect} up to {prefs.MaxSelect} cards." : $"Select {prefs.MaxSelect} card.");
             }
             catch { }
+        }
+
+        var holders = GetVisibleHolders(hand);
+        if (holders.Count > 0)
+        {
+            stringBuilder.AppendLine();
+            stringBuilder.AppendLine("**Selectable cards:**");
+            stringBuilder.RepresentDeck(holders.Select(holder => holder.CardNode!.Model!), PileType.Hand);
         }
         return new ContextReturn(stringBuilder.ToString());
 
