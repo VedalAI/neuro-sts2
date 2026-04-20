@@ -93,7 +93,10 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
         if (ReflectionCache.HandConfirmButton != null)
         {
             if (ReflectionCache.HandConfirmButton.GetValue(hand) is NConfirmButton confirmButton && confirmButton.IsEnabled)
+            {
+                commands.Clear();
                 commands.Add(new("confirm_selection", "Confirm your selection of cards and proceed"));
+            }
         }
 
         return new CommandReturn(commands);
