@@ -53,9 +53,22 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
 
     public ContextReturn GetContext(ContextInfo ctx)
     {
+        if (!firstContext)
+        {
+            // After the first Context, new context is send by cards played
+            return new();
+        }
+        var context = getContext(ctx);
+        return new ContextReturn(context.Message);
+
+    }
+    private ContextReturn getContext(ContextInfo ctx, bool afterPlayed = false)
+    {
+
         StringBuilder stringBuilder = new();
         var combatState = ctx.CombatState;
-        stringBuilder.AppendLine("## You are in combat");
+        if (!afterPlayed)
+            stringBuilder.AppendLine("## You are in combat");
         if (combatState == null)
         {
             Plugin.LogError("Combat state is null in combat context, this should never happen");
@@ -63,12 +76,13 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         }
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var pcs = player.PlayerCombatState;
-        stringBuilder.AppendLine($"### It is currently Round {combatState.RoundNumber} and its your turn");
+        if (!afterPlayed)
+            stringBuilder.AppendLine($"### It is currently Round {combatState.RoundNumber} and its your turn");
         if (pcs != null)
         {
-            stringBuilder.AppendLine($"You currently have {pcs.Energy} Energy and {pcs.Stars} Stars to use");
-            stringBuilder.AppendLine($"You have {pcs.DrawPile.Cards.Count} Cards in the Drawpile, {pcs.DiscardPile.Cards.Count} Cards in the Discardpile and {pcs.ExhaustPile.Cards.Count} Cards in the Exhausted pile");
-            if (player.Relics.Count > 0)
+            stringBuilder.AppendLine($"# You currently have {pcs.Energy} Energy and {pcs.Stars} Stars to use");
+            stringBuilder.AppendLine($"## You have {pcs.DrawPile.Cards.Count} Cards in the Drawpile, {pcs.DiscardPile.Cards.Count} Cards in the Discardpile and {pcs.ExhaustPile.Cards.Count} Cards in the Exhausted pile");
+            if (player.Relics.Count > 0 && !afterPlayed)
             {
                 stringBuilder.AppendLine($"You have {player.Relics.Count} Relics, The Relics are:");
                 stringBuilder.RepresentRelics(player.Relics);
@@ -91,10 +105,10 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
                 }
             }
         }
-        stringBuilder.AppendLine($"You currently have {player.Creature.CurrentHp} HP out of {player.Creature.MaxHp} maxhp and {player.Creature.Block} Block");
+        stringBuilder.AppendLine($"# You currently have {player.Creature.CurrentHp} HP out of {player.Creature.MaxHp} maxhp and {player.Creature.Block} Block");
         if (player.Creature.Powers.Count > 0)
         {
-            stringBuilder.AppendLine($"You have {player.Creature.Powers.Count} Applied on yourself. The Powers are the following:");
+            stringBuilder.AppendLine($"## You have {player.Creature.Powers.Count} Applied on yourself. The Powers are the following:");
             foreach (var power in player.Creature.Powers)
             {
                 stringBuilder.AppendLine($"\t- A {TextHelper.SafeLocString(() => power.Title)} on you with {power.Amount} which does: \"{TextHelper.SafeLocString(() => power.Description)}\"");
@@ -113,7 +127,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
                 stringBuilder.Append($"- {ally.Name} who has {ally.CurrentHp} hp out of {ally.MaxHp} maxhp");
                 if (ally.Block > 0)
                 {
-                    stringBuilder.Append($", it has {ally.Block} block ");
+                    stringBuilder.Append($", they have {ally.Block} block ");
                 }
                 if (ally.Powers.Count > 0)
                 {
@@ -152,8 +166,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             }
             stringBuilder.RepresentEvents(events);
         }
-        return new ContextReturn(stringBuilder.ToString(), !firstContext);
-
+        return new ContextReturn(stringBuilder.ToString().TrimEnd(), true);
     }
 
     public CommandReturn GetCommands(ContextInfo ctx)
@@ -318,6 +331,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         if (!_invalidatedActions.Contains("end_turn"))
             commands.Add(new("end_turn", "Ends your current turn", persistant_action: true));
 
+        if (firstContext)
+        {
+            var context = getContext(ctx);
+            NeuroIntegration.SendContext(context.Message, false);
+        }
 
         return new CommandReturn(commands, ForceWindow: false);
     }
@@ -636,6 +654,9 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         if (!queueResult.Successful)
         {
             Plugin.LogDebug($"ActionQueue: action '{action.Name}' was rejected or cancelled: {queueResult.Message}");
+            actionQueue.AddToDiscardedActionText($"- {action.Name} was cancelled due to {queueResult.Message}");
+            if (actionQueue.Count == 0)
+                actionQueue.SendDiscardedActionText();
             return queueResult;
         }
 
@@ -656,6 +677,9 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         {
             Plugin.LogDebug($"ActionQueue: action '{action.Name}' failed revalidation: {revalidation.Message}");
             actionQueue.ActionFinished();
+            actionQueue.AddToDiscardedActionText($"- {action.Name} was cancelled due to {revalidation.Message}");
+            if (actionQueue.Count == 0)
+                actionQueue.SendDiscardedActionText();
             return revalidation;
         }
 
@@ -695,6 +719,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         finally
         {
             actionQueue.ActionFinished();
+            if (action.Name != "end_turn") // Don't send a new context after ending the turn, we'll get a new one when the next combat round starts
+            {
+                var context = getContext(freshCtx, afterPlayed: true);
+                NeuroIntegration.SendContext(context.Message, context.Silent);
+            }
         }
     }
 
