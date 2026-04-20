@@ -46,6 +46,7 @@ public static class ActionExecutor
                     Plugin.LogError("Stable situation but Action Window has Stale Actions, reseting");
                     action.ActionWindow?.End();
                     GameStabilityDetector.ResetWasStable();
+                    NeuroIntegration.UnregisterAllActions();
                     GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
                 }
                 return result;
