@@ -77,14 +77,14 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var pcs = player.PlayerCombatState;
         if (!afterPlayed)
-            stringBuilder.AppendLine($"### It is currently Round {combatState.RoundNumber} and its your turn");
+            stringBuilder.AppendLine($"### It is currently round {combatState.RoundNumber}, and it's your turn");
         if (pcs != null)
         {
             stringBuilder.AppendLine($"# You currently have {pcs.Energy} Energy and {pcs.Stars} Stars to use");
-            stringBuilder.AppendLine($"## You have {pcs.DrawPile.Cards.Count} Cards in the Drawpile, {pcs.DiscardPile.Cards.Count} Cards in the Discardpile and {pcs.ExhaustPile.Cards.Count} Cards in the Exhausted pile");
+            stringBuilder.AppendLine($"## You have {pcs.DrawPile.Cards.Count} cards in the draw pile, {pcs.DiscardPile.Cards.Count} cards in the discard pile, and {pcs.ExhaustPile.Cards.Count} cards in the exhaust pile");
             if (player.Relics.Count > 0 && !afterPlayed)
             {
-                stringBuilder.AppendLine($"You have {player.Relics.Count} Relics, The Relics are:");
+                stringBuilder.AppendLine($"You have {player.Relics.Count} relics. They are:");
                 stringBuilder.RepresentRelics(player.Relics);
             }
 
@@ -93,10 +93,10 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
                 stringBuilder.AppendLine($"You have {pcs.OrbQueue.Capacity} Orb slots");
                 if (pcs.OrbQueue.Orbs.Count > 0)
                 {
-                    stringBuilder.AppendLine($"Currently you have these orbs in order of usage:");
+                    stringBuilder.AppendLine("You currently have these orbs in order of use:");
                     foreach (var orb in pcs.OrbQueue.Orbs)
                     {
-                        stringBuilder.AppendLine($"- {TextHelper.SafeLocString(() => orb.Title)} it does {orb.PassiveVal} damage passive and {orb.EvokeVal} damage on Evoked");
+                        stringBuilder.AppendLine($"- {TextHelper.SafeLocString(() => orb.Title)} deals {orb.PassiveVal} passive damage and {orb.EvokeVal} damage when evoked");
                     }
                 }
                 else
@@ -105,10 +105,10 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
                 }
             }
         }
-        stringBuilder.AppendLine($"# You currently have {player.Creature.CurrentHp} HP out of {player.Creature.MaxHp} maxhp and {player.Creature.Block} Block");
+        stringBuilder.AppendLine($"# You currently have {player.Creature.CurrentHp} HP out of {player.Creature.MaxHp} max HP and {player.Creature.Block} Block");
         if (player.Creature.Powers.Count > 0)
         {
-            stringBuilder.AppendLine($"## You have {player.Creature.Powers.Count} Applied on yourself. The Powers are the following:");
+            stringBuilder.AppendLine($"## You have {player.Creature.Powers.Count} powers applied to yourself. They are:");
             foreach (var power in player.Creature.Powers)
             {
                 stringBuilder.AppendLine($"\t- A {TextHelper.SafeLocString(() => power.Title)} on you with {power.Amount} which does: \"{TextHelper.SafeLocString(() => power.Description)}\"");
@@ -116,7 +116,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         }
 
         stringBuilder.AppendLine("");
-        stringBuilder.AppendLine($"There are {combatState.Enemies.Count} Enemies:");
+        stringBuilder.AppendLine($"There are {combatState.Enemies.Count} enemies:");
         //Do a safety check if round is finished due to killing an enemy
         if (combatState.Enemies.Count <= 0)
         {
@@ -133,17 +133,17 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         var allies = combatState.Allies.Where(c => c.IsAlive && c != player.Creature);
         if (allies.Any())
         {
-            stringBuilder.AppendLine($"You have: {allies.Count()} allies");
+            stringBuilder.AppendLine($"You have {allies.Count()} allies:");
             foreach (var ally in allies)
             {
-                stringBuilder.Append($"- {ally.Name} who has {ally.CurrentHp} hp out of {ally.MaxHp} maxhp");
+                stringBuilder.Append($"- {ally.Name} has {ally.CurrentHp} HP out of {ally.MaxHp} max HP");
                 if (ally.Block > 0)
                 {
-                    stringBuilder.Append($", they have {ally.Block} block ");
+                    stringBuilder.Append($", and they have {ally.Block} Block");
                 }
                 if (ally.Powers.Count > 0)
                 {
-                    stringBuilder.AppendLine($", they have {ally.Powers.Count} powers: ");
+                    stringBuilder.AppendLine($", and they have {ally.Powers.Count} powers:");
                     foreach (var power in ally.Powers)
                     {
                         stringBuilder.AppendLine($"\t- A {TextHelper.SafeLocString(() => power.Title)} with {power.Amount} which does: {TextHelper.SafeLocString(() => power.Description)}");
@@ -154,7 +154,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             }
         }
         stringBuilder.AppendLine();
-        stringBuilder.AppendLine($"You currently have {pcs?.Hand.Cards.Count} Cards in hand");
+        stringBuilder.AppendLine($"You currently have {pcs?.Hand.Cards.Count} cards in hand");
         stringBuilder.RepresentDeck(pcs.Hand.Cards, PileType.Hand);
         var events = EventLog.DrainAll();
         if (events.Count > 0)
@@ -165,16 +165,16 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             {
                 if (combatState.RoundNumber > 1)
                 {
-                    stringBuilder.AppendLine($"After Your last turn, this happened:");
+                    stringBuilder.AppendLine("After your last turn, this happened:");
                 }
                 else
                 {
-                    stringBuilder.AppendLine($"this happend at the start of combat:");
+                    stringBuilder.AppendLine("This happened at the start of combat:");
                 }
             }
             else
             {
-                stringBuilder.AppendLine($"This has happend after you played a card:");
+                stringBuilder.AppendLine("This happened after you played a card:");
             }
             stringBuilder.RepresentEvents(events);
         }
@@ -221,7 +221,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             {
                 var targeted_potions = player.Potions.Where((p) => p.TargetType is (TargetType.AnyEnemy or TargetType.TargetedNoCreature));
                 if (targeted_potions.Any())
-                    commands.Add(new("use_target_potion", "use a potion on a target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+                    commands.Add(new("use_target_potion", "Use a potion on a target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
                     {
                         ["potion"] = QJS.Enum(targeted_potions.Select((x) => TextHelper.SafeLocString(() => x.Title)).Distinct()),
                         ["target"] = QJS.Enum(ctx.CombatState!.HittableEnemies.GetUniqueNames())
@@ -332,7 +332,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         if (ally_target_cards.Any() && ctx.CombatState?.Allies.Count > 0)
         {
 
-            commands.Add(new("play_ally_target_card", "Select a card that requires a allied Target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+            commands.Add(new("play_ally_target_card", "Select a card that requires an allied target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
                 ["card"] = QJS.Enum(ally_target_cards),
                 ["target"] = QJS.Enum(ctx.CombatState.Allies.GetUniqueNames())
@@ -389,7 +389,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
                 return ExecutionResult.Failure("Turn already ended");
             return ExecutionResult.Success();
         }
-        return ExecutionResult.Unstable("Unkown Action");
+        return ExecutionResult.Unstable("Unknown action");
     }
 
     /// <summary>
@@ -553,7 +553,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         var potion = potions.FirstOrDefault(p => TextHelper.GetActionNameFor(TextHelper.SafeLocString(() => p?.Title ?? new("", ""))) == slot);
 #endif
         if (potion == null)
-            return ExecutionResult.Failure($"No potion named {slot}");
+            return ExecutionResult.Failure($"No potion named '{slot}'");
 
         Plugin.LogDebug("Setting potion");
         parsedData.Potion = potion;
@@ -603,7 +603,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
 
         var hand = pcs.Hand.Cards;
         if (hand == null || hand.Count <= 0)
-            return ExecutionResult.Failure($"Hand isn't valid");
+            return ExecutionResult.Failure("The hand is not valid");
 #if !ALTERNATIVE_ACTIONS
         var card = hand.FirstOrDefault((x) => x.Title == cardIndex && x.CanPlay());
 #else
@@ -616,7 +616,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         var combatState = card?.CombatState;
         if (combatState == null)
         {
-            return ExecutionResult.Failure("card's Combat state is null");
+            return ExecutionResult.Failure("The card's combat state is null");
         }
 
         parsedData.Card = card;
@@ -743,7 +743,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
     {
         if (root.Card == null)
         {
-            return ExecutionResult.ModFailure("[CRITICAL] Couldn't find card even tho it passed validation");
+            return ExecutionResult.ModFailure("Couldn't find the card even though it passed validation");
         }
         try
         {
@@ -755,7 +755,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         catch (Exception e)
         {
             Plugin.LogDebug(e.Message);
-            return ExecutionResult.Failure("Playing the card threw");
+            return ExecutionResult.Failure("Playing the card threw an exception");
         }
         await Task.Delay(1000); // Small delay to make it a better viewing experience
         Plugin.Log($"Played card");
@@ -796,11 +796,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             Creature? enemy = enemies[i];
             var enemy_name = enemy.GetUniqueName(enemies_are_distinct, i);
 
-            stringBuilder.Append($"\t- {enemy_name} has {enemy.CurrentHp} hp out of {enemy.MaxHp} maxhp ");
-            stringBuilder.Append($", It has {enemy.Block} Block");
+            stringBuilder.Append($"\t- {enemy_name} has {enemy.CurrentHp} HP out of {enemy.MaxHp} max HP");
+            stringBuilder.Append($", and it has {enemy.Block} Block");
             if (enemy.Powers.Count > 0)
             {
-                stringBuilder.AppendLine($" and {enemy.Powers.Count} powers, The powers are:");
+                stringBuilder.AppendLine($", and it has {enemy.Powers.Count} powers. They are:");
                 foreach (var power in enemy.Powers)
                 {
                     stringBuilder.AppendLine($"\t\t- A {TextHelper.SafeLocString(() => power.Title)} with {power.Amount} which does: {TextHelper.SafeLocString(() => power.Description)}");

@@ -32,8 +32,8 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
         StringBuilder stringBuilder = new();
         var first_character = ctx.CharacterButtons!.FirstOrDefault(c => c.IsSelected);
         first_character ??= ctx.CharacterButtons!.First();
-        stringBuilder.AppendLine("# Select a Character and Embark on your Adventure to conquer the Spire!");
-        stringBuilder.AppendLine($"# Currently Selected Character is: {TextHelper.StripBBCode(first_character.Character.Title.GetFormattedText())}");
+        stringBuilder.AppendLine("# Select a character and embark on your adventure to conquer the Spire!");
+        stringBuilder.AppendLine($"# Currently selected character: {TextHelper.StripBBCode(first_character.Character.Title.GetFormattedText())}");
         stringBuilder.RepresentStartingCharacter(first_character.Character);
 
         return new ContextReturn(stringBuilder.ToString());
@@ -52,7 +52,7 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
             if (!GodotObject.IsInstanceValid(btn) || btn.IsLocked) continue;
             character_names.Add(GetCharacterName(btn));
         }
-        commands.Add(new ConstructedAction("select_character", "Selects a different Character, Use this to select a different Character at the start of your run", QJS.WrapObject(new Dictionary<string, JsonSchema>
+        commands.Add(new ConstructedAction("select_character", "Select a different character at the start of your run", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
             ["character"] = QJS.Enum(character_names)
         }
@@ -63,7 +63,7 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
         {
             if (ctx.CharacterSelectScreen.GetNode<Control>("ConfirmButton") is NConfirmButton embarkButton
                 && embarkButton.IsEnabled)
-                commands.Add(new ConstructedAction("embark", "Start a new Run with the current selected Character"));
+                commands.Add(new ConstructedAction("embark", "Start a new run with the currently selected character"));
         }
 
         return new CommandReturn(commands);
@@ -98,9 +98,9 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
                     return ExecutionResult.Success();
                 }
             }
-            return ExecutionResult.Failure("Couldn't find Embark button");
+            return ExecutionResult.Failure("Couldn't find the Embark button");
         }
-        return ExecutionResult.ModFailure("Unkown Action for Character Selection, only select_character and embark are valid actions");
+        return ExecutionResult.ModFailure("Unknown action for character selection. Only select_character and embark are valid actions.");
     }
     public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
     {
@@ -154,7 +154,7 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
 
 
             Plugin.Log("Embarked on run");
-            return ExecutionResult.Success("Embarked on run");
+            return ExecutionResult.Success("Embarked on the run");
         }
 
         return null;

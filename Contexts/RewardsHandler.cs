@@ -52,7 +52,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
             return new ContextReturn(string.Empty);
         }
 
-        stringBuilder.AppendLine("## You are on a Rewards screen");
+        stringBuilder.AppendLine("## You are on a rewards screen");
         stringBuilder.AppendLine("You can claim rewards before proceeding.");
         stringBuilder.AppendLine("Once you proceed, every unclaimed reward is discarded.");
         stringBuilder.AppendLine();
@@ -91,9 +91,9 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         var proceedButton = UiHelper.FindFirst<NProceedButton>((Node)rewardsScreen);
         if (proceedButton?.IsEnabled == true)
             if (rewardEntries.Count > 0)
-                commands.Add(new("skip_rewards", "This skips any unclaimed rewards! be sure to collect them all if they are interesting", persistant_action: true));
+                commands.Add(new("skip_rewards", "Skip any unclaimed rewards. Be sure to collect the ones you want first.", persistant_action: true));
             else
-                commands.Add(new("proceed", "Proceed out of the Rewards room", persistant_action: true));
+                commands.Add(new("proceed", "Proceed from the rewards room", persistant_action: true));
 
         return new CommandReturn(commands, ForceWindow: false);
     }
@@ -117,7 +117,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
             if (rewardEntry == null)
             {
                 NeuroIntegration.UnregisterAction(action.Name);
-                return ExecutionResult.Failure("That reward is no longer available, Either it was claimed already or the rewards screen changed");
+                return ExecutionResult.Failure("That reward is no longer available. Either it was already claimed, or the rewards screen changed.");
             }
 
             result.Button = rewardEntry.Button;

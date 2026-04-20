@@ -25,12 +25,12 @@ public class TreasureHandler : IContextHandler<TreasureHandler.Result>
     public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
-        stringBuilder.AppendLine("You are a Treasure Room");
+        stringBuilder.AppendLine("You are in a treasure room.");
         var sync = RunManager.Instance.TreasureRoomRelicSynchronizer;
         var relics = sync?.CurrentRelics;
         if (relics != null)
         {
-            stringBuilder.AppendLine($"In the Treasure Chest there were {relics.Count} relics:");
+            stringBuilder.AppendLine($"The treasure chest contained {relics.Count} relics:");
             foreach (var r in relics)
             {
                 stringBuilder.AppendLine($"\t- {TextHelper.SafeLocString(() => r.Title)} - {TextHelper.GetRelicDescription(r)}");
@@ -44,7 +44,7 @@ public class TreasureHandler : IContextHandler<TreasureHandler.Result>
 
         var room = TreasureRoomAutoPatch.CurrentRoom;
         if (room != null && GodotObject.IsInstanceValid(room) && room.ProceedButton?.IsEnabled == true)
-            commands.Add(new("proceed", "Proceed out of the treasure room"));
+            commands.Add(new("proceed", "Leave the treasure room"));
 
         return new CommandReturn(commands);
     }
@@ -76,6 +76,6 @@ public class TreasureHandler : IContextHandler<TreasureHandler.Result>
 
         await GodotMainThread.ClickAsync(result.ProceedButton);
         Plugin.Log("Clicked proceed on treasure room");
-        return ExecutionResult.Success("Proceeded from treasure room");
+        return ExecutionResult.Success("Left the treasure room");
     }
 }

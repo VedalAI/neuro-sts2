@@ -97,7 +97,7 @@ public class GameOverHandler : IContextHandler<GameOverHandler.GameOverResult>
 
             await GodotMainThread.ClickAsync(continueBtn);
             Plugin.Log("Clicked continue on game over screen");
-            return ExecutionResult.Success("Clicked continue, summary playing");
+            return ExecutionResult.Success("Continued to the run summary");
         }
         else
         {

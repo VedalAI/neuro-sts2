@@ -35,7 +35,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
     public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
-        stringBuilder.AppendLine("You need to select a card");
+        stringBuilder.AppendLine("You need to select a card.");
         var cardHolders = ctx.CardHolders;
         if (cardHolders == null) return new ContextReturn(stringBuilder.ToString());
         // Don't offer commands until the screen is fully initialized (_completionSource set)
@@ -97,7 +97,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
         }
         else
         {
-            commands.Add(new("select_card", "Select a available card", QJS.WrapObject(new Dictionary<string, JsonSchema>
+            commands.Add(new("select_card", "Select an available card", QJS.WrapObject(new Dictionary<string, JsonSchema>
             {
                 ["card"] = QJS.Enum(cardHolders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
             })));
@@ -108,7 +108,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
         if (!canSkip && ctx.OverlayNode != null)
             canSkip = UiHelper.FindFirst<NChoiceSelectionSkipButton>(ctx.OverlayNode) != null;
         if (canSkip)
-            commands.Add(new("skip", "Skip this selection, No card is going to be added to your deck"));
+            commands.Add(new("skip", "Skip this selection. No card will be added to your deck."));
 
         return new CommandReturn(commands);
     }
@@ -120,7 +120,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
             "select_card" => await SelectCard(result, ctx),
             "select_multiple_cards" => await SelectMultipleCards(ctx, result),
             "skip" => await Skip(ctx),
-            _ => ExecutionResult.Failure("Unknown Action")
+            _ => ExecutionResult.Failure("Unknown action")
         };
     }
 
@@ -135,18 +135,18 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
             var cardIndex = data.Data?["card"]?.GetValue<string>();
             if (cardIndex == null)
             {
-                return ExecutionResult.Failure("Missing Parameter card");
+                return ExecutionResult.Failure("Missing parameter: card");
             }
             if (ctx?.OverlayScreen == null || ctx.OverlayNode == null)
                 return ExecutionResult.Failure("No card selection screen open");
             var holders = ctx.CardHolders;
             if (holders == null)
-                return ExecutionResult.Failure($"No Cards to select from");
+                return ExecutionResult.Failure("No cards are available to select");
 
             var holder = holders.First((x) => x.CardNode?.Model?.Title == cardIndex);
             if (holder == null)
             {
-                return ExecutionResult.Failure($"Card name {cardIndex} not in deck");
+                return ExecutionResult.Failure($"Card '{cardIndex}' is not available to select");
             }
 
             result.SelectedCard = holder;
@@ -159,20 +159,20 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
             var cardIndex = data.Data?["cards"]?.AsArray().GetValues<string>();
             if (cardIndex == null)
             {
-                return ExecutionResult.Failure("Missing Parameter cards");
+                return ExecutionResult.Failure("Missing parameter: cards");
             }
             if (ctx?.OverlayScreen == null || ctx.OverlayNode == null)
                 return ExecutionResult.Failure("No card selection screen open");
             var holders = ctx.CardHolders;
             if (holders == null)
-                return ExecutionResult.Failure($"No Cards to select from");
+                return ExecutionResult.Failure("No cards are available to select");
             foreach (var item in cardIndex)
             {
                 var cardName = item;
                 var holder = holders.FirstOrDefault((x) => x.CardNode?.Model?.Title == cardName && !all_nodes.Contains(x));
                 if (holder == null)
                 {
-                    return ExecutionResult.Failure($"Not Enough of {cardName} in Deck. Select fewer and or a different card");
+                    return ExecutionResult.Failure($"Not enough copies of {cardName} are available. Select fewer copies or choose a different card.");
                 }
                 all_nodes.Add(holder);
             }
@@ -180,14 +180,14 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
             return ExecutionResult.Success();
         }
 
-        return ExecutionResult.Failure("Unkown Action");
+        return ExecutionResult.Failure("Unknown action");
     }
     private async Task<ExecutionResult> SelectCard(Result result, ContextInfo ctx)
     {
         if (result.SelectedCard == null)
         {
             Plugin.LogError($"[CRITICAL] Missing Parameter SelectedCard Even tho it passed validation");
-            return ExecutionResult.Failure("Missing Parameter card");
+            return ExecutionResult.Failure("Missing parameter: card");
         }
         Plugin.LogDebug("Selecting card: " + result.SelectedCard?.ToString());
 

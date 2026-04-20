@@ -145,7 +145,7 @@ public class ActionQueue
         {
             if (!string.IsNullOrEmpty(discardedActionText))
             {
-                NeuroIntegration.SendContext($"# Discarded Actions\n{discardedActionText} Please try the actions again if still relevant.", false);
+                NeuroIntegration.SendContext($"# Discarded actions\n{discardedActionText}Please try those actions again if they are still relevant.", false);
             }
             discardedActionText = "";
         }

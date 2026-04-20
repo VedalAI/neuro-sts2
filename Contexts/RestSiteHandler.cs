@@ -28,7 +28,7 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
     public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
-        stringBuilder.AppendLine("You are at a Rest Site, You can only choose one action to do here. The others will be locked for this Restsite");
+        stringBuilder.AppendLine("You are at a rest site. You can choose only one action here. The others will be locked for this rest site.");
         return new ContextReturn(stringBuilder.ToString());
     }
     public CommandReturn GetCommands(ContextInfo ctx)
@@ -41,13 +41,13 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
         {
             if (opt.IsEnabled)
             {
-                commands.Add(new($"rest_option_{opt.OptionId.ToLowerInvariant()}", $" {TextHelper.SafeLocString(() => opt.Title)} - {TextHelper.SafeLocString(() => opt.Description)}"));
+                commands.Add(new($"rest_option_{opt.OptionId.ToLowerInvariant()}", $"{TextHelper.SafeLocString(() => opt.Title)} - {TextHelper.SafeLocString(() => opt.Description)}"));
             }
         }
 
         var nRestSiteRoom = FindNRestSiteRoom();
         if (nRestSiteRoom?.ProceedButton?.IsEnabled == true)
-            commands.Add(new("proceed", "Proceed out of the rest site, The Other Options will be ignored"));
+            commands.Add(new("proceed", "Proceed from the rest site. Any remaining options will be ignored."));
 
         return new CommandReturn(commands);
     }
@@ -100,7 +100,7 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
 
     {
         if (action.Name == "proceed") return await Proceed(result);
-        if (result.SelectedOption == null || !result.SelectedOption.IsVisibleInTree()) return ExecutionResult.ModFailure("Selected Option is invalid");
+        if (result.SelectedOption == null || !result.SelectedOption.IsVisibleInTree()) return ExecutionResult.ModFailure("The selected option is invalid");
 
 
         await GodotMainThread.ClickAsync(result.SelectedOption);

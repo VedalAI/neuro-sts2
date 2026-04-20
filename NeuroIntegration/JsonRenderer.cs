@@ -37,10 +37,10 @@ public static class Renderer
 
         stringBuilder.AppendLine($"\"{TextHelper.GetCharacterDescription(character)}\"");
         stringBuilder.AppendLine("");
-        stringBuilder.AppendLine($"Starts with {character.StartingHp} hp and {character.StartingGold} gold");
+        stringBuilder.AppendLine($"Starts with {character.StartingHp} HP and {character.StartingGold} gold");
         stringBuilder.AppendLine($"Starting deck:");
         RepresentDeck(stringBuilder, character.StartingDeck);
-        stringBuilder.AppendLine($"Starting with relics:");
+        stringBuilder.AppendLine($"Starting relics:");
         RepresentRelics(stringBuilder, character.StartingRelics);
     }
 
@@ -54,7 +54,7 @@ public static class Renderer
             var count = eventBetweenRounds.Count();
             if (count > 1)
             {
-                stringBuilder.AppendLine($"- {firstEvent.Message}, {count} Times ");
+                stringBuilder.AppendLine($"- {firstEvent.Message}, {count} times");
 
             }
             else

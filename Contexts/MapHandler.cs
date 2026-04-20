@@ -29,7 +29,7 @@ public class MapHandler : IContextHandler<MapHandler.Result>
     public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder mapBuilder = new();
-        mapBuilder.AppendLine($"# You are on the map about to travel somewhere, Act {ctx.RunState.CurrentActIndex + 1}");
+        mapBuilder.AppendLine($"# You are on the map and about to travel somewhere. Act {ctx.RunState.CurrentActIndex + 1}");
         mapBuilder.AppendLine($"Your current position is: {ctx.RunState?.CurrentMapCoord.ToString()}");
         mapBuilder.AppendLine($"You can travel to these locations:");
         foreach (var coords in ctx.AvailableMapNodes ?? [])
@@ -56,25 +56,25 @@ public class MapHandler : IContextHandler<MapHandler.Result>
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
-        if (action.Name != "select_map_node") return ExecutionResult.ModFailure("Unknown Action called in Map");
+        if (action.Name != "select_map_node") return ExecutionResult.ModFailure("Unknown action called in the map");
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
             return ExecutionResult.Failure("Cannot access scene tree");
         if (data.Data?["coord"]?.GetValue<string>() is not string index)
         {
-            return ExecutionResult.Failure("missing parameter \"coord\"");
+            return ExecutionResult.Failure("Missing parameter: coord");
         }
         var coord = index.Split(",");
         if (coord.Length <= 0 || coord.Length > 2)
         {
-            return ExecutionResult.Failure("coord is malformed");
+            return ExecutionResult.Failure("The coord parameter is malformed");
         }
         try
         {
             var target = ctx.AvailableMapNodes.Find((x) => x.coord.row == int.Parse(coord[0]) && x.coord.col == int.Parse(coord[1]));
             if (target == null)
             {
-                return ExecutionResult.Failure("Couldn't find specified node");
+                return ExecutionResult.Failure("Couldn't find the specified node");
             }
             var mapPointNodes = UiHelper.FindAll<NMapPoint>(sceneRoot);
             var targetNode = mapPointNodes.FirstOrDefault(mp =>
@@ -88,7 +88,7 @@ public class MapHandler : IContextHandler<MapHandler.Result>
         }
         catch (Exception e)
         {
-            return ExecutionResult.Failure($"Failed to validate coord {e.Message}");
+            return ExecutionResult.Failure($"Failed to validate coord: {e.Message}");
         }
         return ExecutionResult.Success();
     }

@@ -26,9 +26,9 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
   public ContextReturn GetContext(ContextInfo ctx)
   {
     StringBuilder stringBuilder = new();
-    stringBuilder.AppendLine("You are at the CrystalBall Event");
+    stringBuilder.AppendLine("You are at the Crystal Ball event.");
     if (ctx.CrystalSphereScreen == null) return new ContextReturn(stringBuilder.ToString());
-    stringBuilder.AppendLine($"You can reveal cells that might or might not contain a good or bad item. If you fully reveal it you gain the item");
+    stringBuilder.AppendLine("You can reveal cells that might contain a good or bad item. If you fully reveal one, you gain the item.");
 
     var instructionstext = ctx.CrystalSphereScreen.Get(NCrystalSphereScreen.PropertyName._instructionsDescriptionLabel).As<MegaRichTextLabel>();
     if (instructionstext != null)
@@ -44,7 +44,7 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     if (currentSelection != null)
     {
       var selectionLabel = currentSelection.Get(NDivinationButton.PropertyName._label).As<MegaLabel>();
-      stringBuilder.AppendLine($"# Currently you have {selectionLabel?.Text ?? "unknown"} selected");
+      stringBuilder.AppendLine($"# You currently have {selectionLabel?.Text ?? "unknown"} selected");
     }
     return new ContextReturn(stringBuilder.ToString());
   }
@@ -56,7 +56,7 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     var eventScreen = ctx.CrystalSphereScreen;
     if (UiHelper.FindFirst<NProceedButton>(eventScreen) is NProceedButton proceed && proceed.IsEnabled)
     {
-      commands.Add(new("proceed", "Proceed out of the Crystal Ball even"));
+      commands.Add(new("proceed", "Leave the Crystal Ball event"));
       return new CommandReturn(commands);
     }
 
@@ -65,7 +65,7 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     {
       var label = UiHelper.FindFirst<MegaLabel>(divbutton);
       if (label == null) continue;
-      commands.Add(new($"select_{TextHelper.GetActionNameFor(label.Text)}", $"Use to change current Divination Size to {label.Text}"));
+      commands.Add(new($"select_{TextHelper.GetActionNameFor(label.Text)}", $"Change the current divination size to {label.Text}"));
     }
     var cells = eventScreen.Get(NCrystalSphereScreen.PropertyName._cellContainer).As<Control>().GetChildren().OfType<NCrystalSphereCell>().ToList();
     if (cells.Count != 0)
@@ -75,7 +75,7 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
 
       var maxX = cells.MaxBy(x => x.Entity.X)?.Entity?.X;
       var maxY = cells.MaxBy(x => x.Entity.Y)?.Entity?.Y;
-      commands.Add(new($"reveal_cell", $"Reveals a cell at the Selected position between {minX},{minY} and {maxX},{maxY}, The selected position needs to be inside the sphere", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+      commands.Add(new("reveal_cell", $"Reveal a cell at the selected position between {minX},{minY} and {maxX},{maxY}. The selected position must be inside the sphere.", QJS.WrapObject(new Dictionary<string, JsonSchema>()
       {
         ["x"] = new()
         {
@@ -98,7 +98,7 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
 
   public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
   {
-    if (ctx.CrystalSphereScreen == null) return ExecutionResult.ModFailure("Couldn't find Event screen");
+    if (ctx.CrystalSphereScreen == null) return ExecutionResult.ModFailure("Couldn't find the event screen");
     if (action.Name.StartsWith("select_"))
     {
       var divinationButtons = UiHelper.FindAll<NDivinationButton>(ctx.CrystalSphereScreen);
@@ -112,20 +112,20 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
           return ExecutionResult.Success();
         }
       }
-      return ExecutionResult.ModFailure("Couldn't find divination button with that name");
+      return ExecutionResult.ModFailure("Couldn't find a divination button with that name");
     }
     if (action.Name.StartsWith("reveal_"))
     {
-      if (data.Data?["x"] == null || data.Data?["y"] == null) return ExecutionResult.Failure("couldn't find cell position parameter");
+      if (data.Data?["x"] == null || data.Data?["y"] == null) return ExecutionResult.Failure("Couldn't find the cell position parameters");
       var cells = ctx.CrystalSphereScreen.Get(NCrystalSphereScreen.PropertyName._cellContainer).As<Control>().GetChildren().OfType<NCrystalSphereCell>();
       foreach (var cell in cells)
       {
         if ($"{cell.Entity.X}_{cell.Entity.Y}" != $"{data.Data["x"]}_{data.Data["y"]}") continue;
-        if (!cell.Entity.IsHidden) return ExecutionResult.Failure($"Position at {data.Data["x"]}x and {data.Data["y"]}y is already unlocked. try a different position");
+        if (!cell.Entity.IsHidden) return ExecutionResult.Failure($"Position ({data.Data["x"]}, {data.Data["y"]}) is already unlocked. Try a different position.");
         result.SelectedCell = cell;
         return ExecutionResult.Success();
       }
-      return ExecutionResult.Failure("couldn't find cell with that position, it might not be inside of the Crystal Ball");
+      return ExecutionResult.Failure("Couldn't find a cell at that position. It might be outside the Crystal Ball.");
     }
     if (action.Name == "proceed")
     {
@@ -136,30 +136,32 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
       }
       else
       {
-        return ExecutionResult.ModFailure("Couldn't find proceed button or its not available");
+        return ExecutionResult.ModFailure("Couldn't find the proceed button, or it isn't available");
       }
 
     }
-    return ExecutionResult.Unstable("Unkown Action");
+    return ExecutionResult.Unstable("Unknown action");
   }
   public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
   {
     if (action.Name.StartsWith("select_"))
     {
-      if (result.SelectedButton == null) return ExecutionResult.Unstable("Passed Validation without Proper Result");
+      if (result.SelectedButton == null) return ExecutionResult.Unstable("Validation passed without a proper result");
       await GodotMainThread.ClickAsync(result.SelectedButton);
       return ExecutionResult.Success();
     }
     if (action.Name.StartsWith("reveal_"))
     {
-      if (result.SelectedCell == null) return ExecutionResult.Unstable("Passed Validation without Proper Result");
+      if (result.SelectedCell == null) return ExecutionResult.Unstable("Validation passed without a proper result");
       await GodotMainThread.ClickAsync(result.SelectedCell);
-      NeuroIntegration.SendContext($"Revealed Cell had {(result.SelectedCell.Entity.Item is null ? "No Item" : $"a part of an item and it was {(result.SelectedCell.Entity.Item.IsGood ? "a Good Item" : "a Bad Item")} be sure to fully reveal it to claim it")}");
+      NeuroIntegration.SendContext(result.SelectedCell.Entity.Item is null
+        ? "The revealed cell contained no item."
+        : $"The revealed cell contained part of a {(result.SelectedCell.Entity.Item.IsGood ? "good" : "bad")} item. Fully reveal it to claim it.");
       return ExecutionResult.Success();
     }
     if (action.Name == "proceed")
     {
-      if (result.ProceedButton == null) return ExecutionResult.Unstable("Passed Validation without Proper Result");
+      if (result.ProceedButton == null) return ExecutionResult.Unstable("Validation passed without a proper result");
       await GodotMainThread.ClickAsync(result.ProceedButton);
       return ExecutionResult.Success();
     }

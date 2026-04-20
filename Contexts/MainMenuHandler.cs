@@ -37,13 +37,13 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
 
         if (notification.Visible && timelineButton.IsEnabled)
         {
-            stringBuilder.AppendLine("You have an Unseen Epoch, Unlocking it now");
+            stringBuilder.AppendLine("You have an unseen epoch to unlock. Automatically unlocking it now");
             return new ContextReturn(stringBuilder.ToString(), false);
         }
         if (SaveManager.Instance.HasRunSave)
         {
 
-            stringBuilder.AppendLine("You have a previous run in progress, Continuing it now");
+            stringBuilder.AppendLine("You have a previous run in progress. Automatically continuing it now");
             var continueBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton");
             if (continueBtn != null && continueBtn.IsEnabled)
             {
@@ -74,7 +74,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
         {
             var continueBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton");
             if (continueBtn != null && continueBtn.IsEnabled)
-                commands.Add(new ConstructedAction("continue_run", "Continue your Last run"));
+                commands.Add(new ConstructedAction("continue_run", "Continue your last run"));
         }
         else
         {
@@ -98,7 +98,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
     {
         var sceneRoot = SceneHelper.GetSceneRoot();
         var mainMenu = sceneRoot != null ? UiHelper.FindFirst<NMainMenu>(sceneRoot) : null;
-        if (mainMenu == null) return ExecutionResult.Failure("Not in Main Menu can't call this action");
+        if (mainMenu == null) return ExecutionResult.Failure("Not in the main menu; can't call this action");
         switch (action.Name)
         {
             case "continue_run":
@@ -109,7 +109,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
                     return ExecutionResult.Success();
                 }
                 else
-                    return ExecutionResult.ModFailure("Can't continue run if no previous run exists");
+                    return ExecutionResult.ModFailure("Can't continue a run when no previous run exists");
             case "abandon_run":
                 var abandonBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/AbandonRunButton");
                 if (abandonBtn != null && abandonBtn.IsEnabled)
@@ -118,7 +118,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
                     return ExecutionResult.Success();
                 }
                 else
-                    return ExecutionResult.ModFailure("Can't abandon run if no previous run exists");
+                    return ExecutionResult.ModFailure("Can't abandon a run when no previous run exists");
             case "start_run":
                 var spButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton");
                 if (spButton != null && spButton.IsEnabled)
@@ -127,7 +127,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
                     return ExecutionResult.Success();
                 }
                 else
-                    return ExecutionResult.ModFailure("can't start run. A run is already active");
+                    return ExecutionResult.ModFailure("Can't start a run. A run is already active.");
             case "view_timeline":
                 var timelineButton = mainMenu.Get(NMainMenu.PropertyName._timelineButton).As<NMainMenuTextButton>();
                 if (timelineButton.IsEnabled)
@@ -139,7 +139,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
                     return ExecutionResult.ModFailure("Timeline is not available or not enabled");
         }
 
-        return ExecutionResult.Failure("Unknown Action called in Main Menu");
+        return ExecutionResult.Failure("Unknown action called in the main menu");
     }
     public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
     {
@@ -159,7 +159,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
             }
 
             Plugin.Log("Continued saved run");
-            return ExecutionResult.Success("Continued saved run");
+            return ExecutionResult.Success("Continued the saved run");
         }
 
         if (action.Name == "abandon_run")
@@ -182,7 +182,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
 
             Plugin.Log("Abandoned saved run");
             // GameStabilityDetector.ResetWasStable();
-            return ExecutionResult.Success("Abandoned saved run");
+            return ExecutionResult.Success("Abandoned the saved run");
         }
 
         if (action.Name == "start_run")

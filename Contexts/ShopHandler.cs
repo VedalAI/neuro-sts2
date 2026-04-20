@@ -32,13 +32,13 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
 
         if (!ctx.ShopIsOpen)
         {
-            stringBuilder.AppendLine("You reached a shop");
+            stringBuilder.AppendLine("You reached a shop.");
             return new ContextReturn(stringBuilder.ToString());
         }
         var player = LocalContext.GetMe(ctx.RunState.Players);
-        stringBuilder.AppendLine($"You are inside of a shop. You have {player!.Gold} gold to spend");
-        stringBuilder.AppendLine("In the shop you can buy cards,relics or remove a card from your deck");
-        stringBuilder.AppendLine("Once you are done with all your purchases you can leave the shop and proceed with your adventure");
+        stringBuilder.AppendLine($"You are inside a shop. You have {player!.Gold} gold to spend.");
+        stringBuilder.AppendLine("In the shop, you can buy cards, relics, or remove a card from your deck.");
+        stringBuilder.AppendLine("Once you are done with your purchases, you can leave the shop and continue your adventure.");
         return new ContextReturn(stringBuilder.ToString());
     }
     public CommandReturn GetCommands(ContextInfo ctx)
@@ -47,8 +47,8 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
 
         if (!ctx.ShopIsOpen)
         {
-            commands.Add(new("shop_open", "Open the Shop"));
-            commands.Add(new("shop_leave", "Leave the Shop"));
+            commands.Add(new("shop_open", "Open the shop"));
+            commands.Add(new("shop_leave", "Leave the shop"));
             return new CommandReturn(commands);
         }
 
@@ -62,7 +62,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
                 }
             }
         }
-        commands.Add(new("shop_leave", "Leave the Shop"));
+        commands.Add(new("shop_leave", "Leave the shop"));
 
         return new CommandReturn(commands);
     }
@@ -74,7 +74,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
 
             var nRoom = NMerchantRoom.Instance;
             if (nRoom == null)
-                return ExecutionResult.Failure("Not in shop");
+                return ExecutionResult.Failure("You are not in a shop");
             if (nRoom.Inventory?.IsOpen == true)
                 return ExecutionResult.Failure("Shop already open");
 
@@ -92,7 +92,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
 
             var button = UiHelper.FindFirst<NProceedButton>(sceneRoot);
             if (button == null)
-                return ExecutionResult.Failure("Cannot find Leave button");
+                return ExecutionResult.Failure("Couldn't find the Leave button");
             parsedData.Button = button;
 
         }
@@ -100,7 +100,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         {
             var itemIndex = action.Name.Replace("shop_buy_", "");
             if (string.IsNullOrWhiteSpace(itemIndex))
-                return ExecutionResult.Failure("Trying to buy a non item");
+                return ExecutionResult.Failure("Tried to buy a non-item");
             var items = ctx.ShopItems;
             var inv = ctx.ShopInventory;
 
@@ -124,7 +124,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         if (action.Name == "shop_open") return await ShopOpen(result);
         if (action.Name.StartsWith("shop_buy_")) return await ShopBuy(result, ctx);
         if (action.Name == "shop_leave") return await ShopLeave(result);
-        return ExecutionResult.Failure("Invalid shop action!");
+        return ExecutionResult.Failure("Invalid shop action");
 
     }
 
@@ -149,7 +149,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         // Shop leave: find proceed button
         await GodotMainThread.ClickAsync(result.Button);
         Plugin.Log("Clicked proceed (shop leave)");
-        return ExecutionResult.Success("Proceeded");
+        return ExecutionResult.Success("Left the shop");
     }
 
 

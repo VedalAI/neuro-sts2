@@ -37,7 +37,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
         }
 
         StringBuilder eventBuilder = new();
-        eventBuilder.AppendLine("## You are in an Event");
+        eventBuilder.AppendLine("## You are in an event");
         eventBuilder.AppendLine($"**Event name:** {TextHelper.SafeLocString(() => evt.Title)}");
 
 
@@ -82,14 +82,14 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
                 }
                 else
                 {
-                    eventBuilder.AppendLine("No Description");
+                    eventBuilder.AppendLine("No description");
                 }
 
             }
             catch
             {
 
-                eventBuilder.AppendLine("No Description");
+                eventBuilder.AppendLine("No description");
             }
         }
 
@@ -114,11 +114,11 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
 
         if (evt.IsFinished)
         {
-            commands.Add(new("proceed", "Finish the current Event"));
+            commands.Add(new("proceed", "Finish the current event"));
         }
         else
         {
-            commands.Add(new("select_event_option", "Select a option in the Event", QJS.WrapObject(new Dictionary<string, JsonSchema>
+            commands.Add(new("select_event_option", "Select an option in the event", QJS.WrapObject(new Dictionary<string, JsonSchema>
             {
                 ["option"] = QJS.Enum(evt.CurrentOptions.Where((x) => !x.IsLocked).Select((x) => x.Title.GetUnformatedText()))
             })));
@@ -155,7 +155,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
                 return ExecutionResult.Success();
             }
 
-            return ExecutionResult.Unstable("Couldn't find a Proceed button. You are mostlikely stuck here...");
+            return ExecutionResult.Unstable("Couldn't find a proceed button. You are most likely stuck here...");
         }
         var optionName = data?.Data?["option"]?.GetValue<string>() ?? ""; //TODO: Figure out if this is good enough.
 
@@ -169,11 +169,11 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
         if (button == null)
         {
             Plugin.LogDebug($"Event button lookup: requested={optionName}, found={allButtons.Count} buttons");
-            return ExecutionResult.Unstable($"Event option index {optionName} not found");
+            return ExecutionResult.Unstable($"Event option '{optionName}' not found");
         }
         if (button.Option.IsLocked)
         {
-            return ExecutionResult.Failure($"Event option index {optionName} is Locked");
+            return ExecutionResult.Failure($"Event option '{optionName}' is locked");
         }
         parsedData.Button = button;
 

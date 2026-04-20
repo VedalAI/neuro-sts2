@@ -45,7 +45,7 @@ public class NeuroIntegration : Node
 
   public new void Ready()
   {
-    Context.Send("You are Playing Slay the Spire 2");
+    Context.Send("You are playing Slay the Spire 2");
   }
 
   public void Processs()
@@ -125,11 +125,11 @@ public class NeuroIntegration : Node
     {
 
       StringBuilder stringBuilder = new();
-      //Drain Any pending Events that happened. can happen when switching Context at the end of a Action. like Combat
-      stringBuilder.RepresentEvents(EventLog.DrainAll());
-      if (stringBuilder.Length > 0)
-      {
-        SendContext($"These Events happened During a Context Switch:\n{stringBuilder}");
+        //Drain Any pending Events that happened. can happen when switching Context at the end of a Action. like Combat
+        stringBuilder.RepresentEvents(EventLog.DrainAll());
+        if (stringBuilder.Length > 0)
+        {
+          SendContext($"These events happened during a context switch:\n{stringBuilder}");
       }
       var oldhandler = ActionExecutor.GetHandlers().GetValueOrDefault(lastContext);
       if (oldhandler != null && oldhandler is IOnContextSwitch switchHandler)
@@ -222,11 +222,11 @@ public class NeuroIntegration : Node
       }
       NeuroActionHandler.RegisterActions(new_global_actions);
       if (CommandsList.ForceActionWindow)
-        lastWindow.SetForce(1, "It's your Turn please do an Action", null);
+        lastWindow.SetForce(1, "It's your turn. Please take an action.", null);
       else
       {
         // Force an action for every action
-        var force = new ActionsForce("It's your Turn please do an Action", null, true, ActionsForce.Priority.Low, CommandsList.Commands);
+        var force = new ActionsForce("It's your turn. Please take an action.", null, true, ActionsForce.Priority.Low, CommandsList.Commands);
         GodotMainThread.RunAsync(async () =>
          {
            await Task.Delay(1000);

@@ -33,7 +33,7 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Res
         var bundles = ctx.Bundles;
         if (bundles == null) return new ContextReturn(stringBuilder.ToString());
         if (bundles.Count == 0) return new ContextReturn(stringBuilder.ToString());
-        stringBuilder.AppendLine($"You have to select a bundle of cards");
+        stringBuilder.AppendLine("You need to select a bundle of cards.");
         stringBuilder.AppendLine($"You have {bundles.Count} bundles available to choose from:");
 
         for (int i = 0; i < bundles.Count; i++)
@@ -41,12 +41,11 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Res
             NCardBundle? bundle = bundles[i];
             if (bundle.Bundle == null) continue;
 
-            stringBuilder.AppendLine($"[{i}] bundle: (");
+            stringBuilder.AppendLine($"[{i}] Bundle:");
             foreach (var card in bundle.Bundle)
             {
-                stringBuilder.Append($", {card.Title} - {TextHelper.GetCardDescription(card)}");
+                stringBuilder.AppendLine($"- {card.Title} - {TextHelper.GetCardDescription(card)}");
             }
-            stringBuilder.AppendLine(")");
         }
         return new ContextReturn(stringBuilder.ToString());
     }

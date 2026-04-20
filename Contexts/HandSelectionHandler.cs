@@ -93,7 +93,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
         if (ReflectionCache.HandConfirmButton != null)
         {
             if (ReflectionCache.HandConfirmButton.GetValue(hand) is NConfirmButton confirmButton && confirmButton.IsEnabled)
-                commands.Add(new("confirm_selection", "Confirm your Selection of Cards and Proceed"));
+                commands.Add(new("confirm_selection", "Confirm your selection of cards and proceed"));
         }
 
         return new CommandReturn(commands);
@@ -109,13 +109,13 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
 
             var cardIndex = data.Data?["cards"]?.AsArray().GetValues<string>();
             if (cardIndex == null)
-                return ExecutionResult.Failure("Missing Parameter cards");
+                return ExecutionResult.Failure("Missing parameter: cards");
             var cardname = cardIndex.FirstOrDefault();
             if (cardIndex == null)
-                return ExecutionResult.Failure("Missing card inside of array");
+                return ExecutionResult.Failure("Missing a card value in the array");
             var holders = GetVisibleHolders(hand);
             if (holders == null)
-                return ExecutionResult.ModFailure("Couldn't find Hand to select from");
+                return ExecutionResult.ModFailure("Couldn't find the hand to select from");
 
             var holder = holders.FirstOrDefault(e => e.CardNode?.Model?.Title == cardname);
             if (holder == null)

@@ -83,13 +83,13 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
       var tounlock = tounlockEpochs.Where(x => x.State == EpochSlotState.Obtained);
       if (tounlock.Any())
       {
-        commands.Add(new("unlock_epoch", "Unlock the next Obtained Epoch, This will give you their rewards and context what they are for the Story of Slay the Spire 2"));
+        commands.Add(new("unlock_epoch", "Unlock the next obtained epoch. This gives you its rewards and story context for Slay the Spire 2."));
       }
     }
     var inspectScreen = UiHelper.FindFirst<NEpochInspectScreen>(ctx.TimelineScreen);
     if (inspectScreen != null && inspectScreen.Visible)
     {
-      commands.Add(new("proceed_epoch", "Close the unlocked Epoch"));
+      commands.Add(new("proceed_epoch", "Close the unlocked epoch"));
     }
     var unlockScreen = UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
     if (unlockScreen != null && unlockScreen.Visible)
@@ -97,13 +97,13 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
       var button = UiHelper.FindFirst<NUnlockConfirmButton>(unlockScreen);
       if (button != null)
       {
-        commands.Add(new("close_unlock", "Close the Unlock Screen"));
+        commands.Add(new("close_unlock", "Close the unlock screen"));
       }
     }
     var backButton = ctx.TimelineScreen.Get(NTimelineScreen.PropertyName._backButton).As<NBackButton>();
     if (backButton != null && backButton.IsEnabled && backButton.Visible)
     {
-      commands.Add(new("back_to_main_menu", "Closes the Timeline and brings you back to the Main Menu"));
+      commands.Add(new("back_to_main_menu", "Close the timeline and return to the main menu"));
     }
     return new CommandReturn(commands, true);
   }
@@ -118,7 +118,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         result.ProceedButton = acknowledgeButton;
         return ExecutionResult.Success();
       }
-      return ExecutionResult.Unstable("Couldn't find proceed button");
+      return ExecutionResult.Unstable("Couldn't find the proceed button");
     }
     if (action.Name == "unlock_epoch")
     {
@@ -158,7 +158,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
           return ExecutionResult.Success();
         }
       }
-      return ExecutionResult.ModFailure("Couldn't Find Close button on Unlock screen");
+      return ExecutionResult.ModFailure("Couldn't find the close button on the unlock screen");
     }
 
     if (action.Name == "back_to_main_menu")
@@ -169,10 +169,10 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         result.ProceedButton = backButton;
         return ExecutionResult.Success();
       }
-      return ExecutionResult.ModFailure("Couldn't Find Back button on Timeline");
+      return ExecutionResult.ModFailure("Couldn't find the Back button on the timeline");
     }
 
-    return ExecutionResult.Unstable("Unkown Action");
+    return ExecutionResult.Unstable("Unknown action");
   }
   public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
   {
