@@ -202,7 +202,7 @@ public class NeuroIntegration : Node
         }
         else
         {
-          if (GlobalActions.Find((action) => action.Name == item.Name) == null)
+          if (GlobalActions.Find((action) => action.Name == item.Name) == null && !new_global_actions.Any(action => action.Name == item.Name))
           {
             GlobalActions.Add(item);
             new_global_actions.Add(item);
