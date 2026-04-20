@@ -611,7 +611,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         var card = hand.OrderBy(x => x.EnergyCost.GetAmountToSpend() + x.CurrentStarCost).FirstOrDefault((x) => TextHelper.GetActionNameFor(x.Title) == cardIndex && x.CanPlay());
 #endif
         if (card == null || !card.CanPlay())
+        {
+            NeuroIntegration.UnregisterAction(action.Name);
             return ExecutionResult.Failure($"Card '{cardIndex}' cannot be played");
+
+        }
 
         var combatState = card?.CombatState;
         if (combatState == null)

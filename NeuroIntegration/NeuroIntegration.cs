@@ -137,6 +137,7 @@ public class NeuroIntegration : Node
         switchHandler.OnContextSwitch(ctx.Type);
         Plugin.LogDebug($"Context Switch: Called OnContextSwitch for {lastContext} -> {ctx.Type}");
       }
+      UnregisterAllActions();
       lastContext = ctx.Type;
     }
 
