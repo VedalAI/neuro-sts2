@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
+using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using STS2NeuroIntegration;
@@ -20,23 +21,12 @@ public class TreasureHandler : IContextHandler<TreasureHandler.Result>
     {
         public NProceedButton ProceedButton;
     }
+
     public ContextType Type => ContextType.Treasure;
 
     public ContextReturn GetContext(ContextInfo ctx)
     {
-        StringBuilder stringBuilder = new();
-        stringBuilder.AppendLine("You are in a treasure room.");
-        var sync = RunManager.Instance.TreasureRoomRelicSynchronizer;
-        var relics = sync?.CurrentRelics;
-        if (relics != null)
-        {
-            stringBuilder.AppendLine($"The treasure chest contained {relics.Count} relics:");
-            foreach (var r in relics)
-            {
-                stringBuilder.AppendLine($"\t- {TextHelper.SafeLocString(() => r.Title)} - {TextHelper.GetRelicDescription(r)}");
-            }
-        }
-        return new ContextReturn(stringBuilder.ToString());
+        return new ContextReturn("");
     }
     public CommandReturn GetCommands(ContextInfo ctx)
     {
@@ -64,18 +54,16 @@ public class TreasureHandler : IContextHandler<TreasureHandler.Result>
     }
 
     public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
-
     {
         if (action.Name == "proceed")
-            return await Proceed(result);
+            return await Proceed(result, ctx);
         return null;
     }
 
-    private async Task<ExecutionResult> Proceed(Result result)
+    private async Task<ExecutionResult> Proceed(Result result, ContextInfo ctx)
     {
-
         await GodotMainThread.ClickAsync(result.ProceedButton);
         Plugin.Log("Clicked proceed on treasure room");
-        return ExecutionResult.Success("Left the treasure room");
+        return ExecutionResult.Success();
     }
 }

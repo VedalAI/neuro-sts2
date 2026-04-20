@@ -18,6 +18,10 @@ using MegaCrit.Sts2.Core.Nodes.Screens.TreasureRoomRelic;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Agent.Utilities;
+using MegaCrit.Sts2.Core.Nodes.Relics;
+using System.Text;
+using Sts2Agent.Contexts;
+using STS2NeuroIntegration;
 
 namespace Sts2Agent;
 
@@ -100,6 +104,7 @@ public static class TreasureRoomAutoPatch
     public static bool AutoClickInProgress { get; private set; }
     public static NTreasureRoom? CurrentRoom { get; private set; }
 
+
     [HarmonyPostfix]
     public static void Postfix(NTreasureRoom __instance)
     {
@@ -142,12 +147,15 @@ public static class TreasureRoomAutoPatch
                 return found;
             });
 
+            StringBuilder stringBuilder = new();
+            stringBuilder.AppendLine("Received relics in Treasure Room:");
             foreach (var holder in holders)
             {
                 var canClick = await GodotMainThread.RunAsync(() =>
                     GodotObject.IsInstanceValid(holder) && holder.IsEnabled && holder.Visible);
                 if (canClick)
                 {
+                    stringBuilder.AppendLine($"- {TextHelper.SafeLocString(() => holder.Relic.Model.Title)}: {TextHelper.GetRelicDescription(holder.Relic.Model)}");
                     Plugin.LogDebug("Treasure room: clicking relic");
                     await GodotMainThread.ClickAsync(holder);
                     await Task.Delay(500);
@@ -163,6 +171,7 @@ public static class TreasureRoomAutoPatch
                     break;
                 await Task.Delay(500);
             }
+            NeuroIntegration.SendContext(stringBuilder.ToString());
 
             Plugin.LogDebug("Treasure room: auto-open complete");
         }
