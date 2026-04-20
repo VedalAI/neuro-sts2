@@ -226,7 +226,7 @@ public class NeuroIntegration : Node
       else
       {
         // Force an action for every action
-        var force = new ActionsForce("Please do an Action", null, true, ActionsForce.Priority.Low, CommandsList.Commands);
+        var force = new ActionsForce("It's your Turn please do an Action", null, true, ActionsForce.Priority.Low, CommandsList.Commands);
         GodotMainThread.RunAsync(async () =>
          {
            await Task.Delay(1000);
