@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
 using MegaCrit.Sts2.Core.AutoSlay.Helpers;
@@ -39,8 +38,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
 
         StringBuilder eventBuilder = new();
         eventBuilder.AppendLine("## You are in an Event");
-
-        eventBuilder.AppendLine("Event name: " + TextHelper.SafeLocString(() => evt.Title));
+        eventBuilder.AppendLine($"**Event name:** {TextHelper.SafeLocString(() => evt.Title)}");
 
 
         try
@@ -48,22 +46,32 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
             var desc = evt.Description;
             if (desc != null)
             {
-                eventBuilder.AppendLine("Event Description: ");
+                eventBuilder.AppendLine();
+                eventBuilder.AppendLine("**Event description:**");
                 eventBuilder.AppendLine(desc.GetUnformatedText());
             }
             else
+            {
+                eventBuilder.AppendLine();
+                eventBuilder.AppendLine("**Event description:**");
                 eventBuilder.AppendLine(TextHelper.SafeLocString(() => evt.InitialDescription));
+            }
         }
         catch
         {
         }
 
         if (evt.CurrentOptions.Count > 0)
-            eventBuilder.AppendLine("Available options are: ");
+        {
+            eventBuilder.AppendLine();
+            eventBuilder.AppendLine("**Options:**");
+        }
         foreach (var eventoption in evt.CurrentOptions)
         {
+            string optionTitle = TextHelper.SafeLocString(() => eventoption.Title);
+            string optionState = eventoption.IsLocked ? "(Locked)" : "";
+            eventBuilder.Append($"- **{optionTitle}** {optionState}: ");
 
-            eventBuilder.Append($"- {TextHelper.SafeLocString(() => eventoption.Title)}: ");
             try
             {
                 var optDesc = eventoption.Description;
@@ -85,72 +93,14 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
             }
         }
 
+        var lockedOptions = evt.CurrentOptions.Where(option => option.IsLocked).ToList();
+        if (lockedOptions.Count > 0)
+        {
+            eventBuilder.AppendLine();
+            eventBuilder.AppendLine("**Locked options cannot currently be selected.**");
+        }
+
         return new ContextReturn(eventBuilder.ToString());
-    }
-
-    public Dictionary<string, object>? SerializeState(ContextInfo ctx)
-    {
-        var eventRoom = ctx.EventRoom;
-        if (eventRoom == null) return null;
-
-        var evt = eventRoom.LocalMutableEvent;
-        if (evt == null)
-        {
-            return new Dictionary<string, object>
-            {
-                ["title"] = TextHelper.SafeLocString(() => eventRoom.CanonicalEvent.Title),
-                ["description"] = "",
-                ["options"] = new List<object>()
-            };
-        }
-
-        var result = new Dictionary<string, object>
-        {
-            ["title"] = TextHelper.SafeLocString(() => evt.Title)
-        };
-
-        try
-        {
-            var desc = evt.Description;
-            if (desc != null)
-                result["description"] = TextHelper.StripBBCode(desc.GetFormattedText());
-            else
-                result["description"] = TextHelper.SafeLocString(() => evt.InitialDescription);
-        }
-        catch
-        {
-            result["description"] = "";
-        }
-
-        result["options"] = evt.CurrentOptions.Select((opt, i) =>
-        {
-            var optDict = new Dictionary<string, object>
-            {
-                ["index"] = i,
-                ["label"] = TextHelper.SafeLocString(() => opt.Title),
-                ["locked"] = opt.IsLocked
-            };
-            try
-            {
-                var optDesc = opt.Description;
-                if (optDesc != null)
-                {
-                    evt.DynamicVars.AddTo(optDesc);
-                    optDict["description"] = TextHelper.StripBBCode(optDesc.GetFormattedText());
-                }
-                else
-                {
-                    optDict["description"] = "";
-                }
-            }
-            catch
-            {
-                optDict["description"] = "";
-            }
-            return optDict;
-        }).ToList();
-
-        return result;
     }
 
     public CommandReturn GetCommands(ContextInfo ctx)
