@@ -112,6 +112,8 @@ public class NeuroIntegration : Node
   ContextType lastContext = ContextType.Unknown;
   public static Action OnContextSwitch;
 
+  public int StabilityCheckCounter = 0;
+
   public void HandleDecisionPoint()
   {
 
@@ -159,12 +161,27 @@ public class NeuroIntegration : Node
 
     if (ActionExecutor.ProcessEnqueuedActions())
     {
+      StabilityCheckCounter++;
+      if (StabilityCheckCounter >= 20)
+      {
+        Plugin.LogWarning("Forced Action Window has been open for 20 decision points, closing to prevent softlock");
+        lastWindow?.End();
+      }
       return;
     }
     if (lastWindow?.CurrentState == ActionWindow.State.Forced)
     {
+      StabilityCheckCounter++;
+      if (StabilityCheckCounter >= 20)
+      {
+        Plugin.LogWarning("Forced Action Window has been open for 20 decision points, closing to prevent softlock");
+        lastWindow?.End();
+        GameStabilityDetector.ResetWasStable();
+        GameStabilityDetector.ScheduleStabilityCheck();
+      }
       return;
     }
+    StabilityCheckCounter = 0;
     if (handler.GetCommands(ctx) is CommandReturn CommandsList)
     {
       var contextReturn = handler.GetContext(ctx);
@@ -250,9 +267,9 @@ public class NeuroIntegration : Node
              GameStabilityDetector.ScheduleStabilityCheck();
              return;
            }
-           if (!oldGlobalActions.All(action => GlobalActions.Contains(action)))
+           if (!oldGlobalActions.All(action => GlobalActions.Contains(action)) || GlobalActions.Count <= 0 || CommandsList.Commands.Count <= 0)
            {
-             Plugin.LogDebug("Not sending force, Global Actions have changed");
+             Plugin.LogDebug("Not sending force, Global Actions have changed or are empty");
              GameStabilityDetector.ResetWasStable();
              GameStabilityDetector.ScheduleStabilityCheck();
              return;
@@ -264,7 +281,7 @@ public class NeuroIntegration : Node
            WebsocketConnection.Instance!.Send(force);
          });
       }
-
+      GodotMainThread.RunAsync(async () => { await Task.Delay(2000); GameStabilityDetector.ScheduleStabilityCheck(); });
     }
     else
     {
