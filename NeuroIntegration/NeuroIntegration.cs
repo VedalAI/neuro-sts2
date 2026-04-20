@@ -225,9 +225,14 @@ public class NeuroIntegration : Node
           }
         }
       }
-      NeuroActionHandler.RegisterActions(new_global_actions);
+      if (new_global_actions.Count > 0)
+        NeuroActionHandler.RegisterActions(new_global_actions);
       if (CommandsList.ForceActionWindow)
+      {
         lastWindow.SetForce(1, "It's your turn. Please take an action.", null);
+        if (hasNonPersistant)
+          lastWindow.Register();
+      }
       else
       {
         // Force an action for every action
@@ -247,16 +252,12 @@ public class NeuroIntegration : Node
              Plugin.LogDebug("Not sending force, Global Actions have changed");
              return;
            }
+           if (!string.IsNullOrEmpty(contextReturn.Message))
+             SendContext(contextReturn.Message, contextReturn.Silent);
            WebsocketConnection.Instance!.Send(force);
+           if (hasNonPersistant)
+             lastWindow.Register();
          });
-      }
-      if (hasNonPersistant)
-        lastWindow.Register();
-      else
-      {
-        //Send Context manually. as the Action Window won't send it itself
-        if (!string.IsNullOrEmpty(contextReturn.Message))
-          SendContext(contextReturn.Message, contextReturn.Silent);
       }
 
     }
