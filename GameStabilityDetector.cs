@@ -161,7 +161,7 @@ public static class GameStabilityDetector
             _pendingCheck = false;
             return;
         }
-        var timer = tree.CreateTimer(0.2);
+        var timer = tree.CreateTimer(0.5);
         timer.Timeout += OnDelayedCheckTimeout;
     }
 
@@ -217,7 +217,8 @@ public static class GameStabilityDetector
                         && cm.IsPlayPhase
                         && !cm.PlayerActionsDisabled
                         && RunManager.Instance.ActionExecutor.CurrentlyRunningAction == null;
-                    Plugin.LogDebug($"IsStable: combat → IsPlayPhase={cm?.IsPlayPhase}, ActionsDisabled={cm?.PlayerActionsDisabled}, RunningAction={RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.GetType().Name ?? "null"} → {result}");
+                    if (cm != null)
+                        Plugin.LogDebug($"IsStable: combat → IsPlayPhase={cm?.IsPlayPhase}, ActionsDisabled={cm?.PlayerActionsDisabled}, RunningAction={RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.GetType().Name ?? "null"} → {result}");
                     return result;
                 }
 
@@ -227,7 +228,8 @@ public static class GameStabilityDetector
                     if ((evt is AncientEventModel && EventContextHandler.TryAdvanceAncientDialogue()) || evt == null)
                         return false;
                     var evtResult = evt != null && (evt.CurrentOptions.Count > 0 || evt.IsFinished);
-                    Plugin.LogDebug($"IsStable: event → hasEvent={evt != null}, options={evt?.CurrentOptions.Count ?? 0}, finished={evt?.IsFinished} → {evtResult}");
+                    if (evt != null)
+                        Plugin.LogDebug($"IsStable: event → hasEvent={evt != null}, options={evt?.CurrentOptions.Count ?? 0}, finished={evt?.IsFinished} → {evtResult}");
                     return evtResult;
                 }
 
