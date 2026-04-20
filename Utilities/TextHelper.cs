@@ -15,6 +15,55 @@ public static class TextHelper
     private static readonly Regex ImgTagRegex = new(@"\[img[^\]]*\](.*?)\[/img\]", RegexOptions.Compiled);
     private static readonly Regex BbCodeRegex = new(@"\[/?[^\]]+\]", RegexOptions.Compiled);
 
+    private static readonly Dictionary<char, string> _urlUnsafeChars = new()
+    {
+        ['+'] = "plus",
+        ['-'] = "minus",
+        [' '] = "_",
+        ['&'] = "and",
+        ['%'] = "percent",
+        ['#'] = "hash",
+        ['@'] = "at",
+        ['!'] = "excl",
+        ['?'] = "q",
+        ['='] = "eq",
+        ['/'] = "slash",
+        ['\\'] = "backslash",
+        ['.'] = "dot",
+        [','] = "comma",
+        [';'] = "semi",
+        [':'] = "colon",
+        ['\''] = "apos",
+        ['"'] = "quot",
+        ['<'] = "lt",
+        ['>'] = "gt",
+        ['['] = "lbracket",
+        [']'] = "rbracket",
+        ['{'] = "lbrace",
+        ['}'] = "rbrace",
+        ['('] = "lparen",
+        [')'] = "rparen",
+        ['*'] = "star",
+        ['^'] = "caret",
+        ['~'] = "tilde",
+        ['`'] = "grave",
+        ['|'] = "pipe",
+    };
+
+    private static string SanitizeName(string name)
+    {
+        var sb = new StringBuilder();
+        foreach (char c in name)
+        {
+            if (_urlUnsafeChars.TryGetValue(c, out var replacement))
+                sb.Append($"_{replacement}");
+            else
+                sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
+
     public static string StripBBCode(string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -31,7 +80,7 @@ public static class TextHelper
 
     public static string GetActionNameFor(string Title)
     {
-        return Title.ToLowerInvariant().Replace(' ', '_');
+        return SanitizeName(Title.ToLowerInvariant());
     }
     public static string GetActionName(this LocString locString)
     {
