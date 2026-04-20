@@ -343,11 +343,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         if (!_invalidatedActions.Contains("end_turn"))
             commands.Add(new("end_turn", "Ends your current turn", persistant_action: true));
 
-        if (firstContext)
-        {
-            var context = getContext(ctx);
-            NeuroIntegration.SendContext(context.Message, false);
-        }
+        // if (firstContext)
+        // {
+        //     var context = getContext(ctx);
+        //     NeuroIntegration.SendContext(context.Message, false);
+        // }
 
         return new CommandReturn(commands, ForceWindow: false);
     }

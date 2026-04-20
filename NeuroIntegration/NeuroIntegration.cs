@@ -125,11 +125,11 @@ public class NeuroIntegration : Node
     {
 
       StringBuilder stringBuilder = new();
-        //Drain Any pending Events that happened. can happen when switching Context at the end of a Action. like Combat
-        stringBuilder.RepresentEvents(EventLog.DrainAll());
-        if (stringBuilder.Length > 0)
-        {
-          SendContext($"These events happened during a context switch:\n{stringBuilder}");
+      //Drain Any pending Events that happened. can happen when switching Context at the end of a Action. like Combat
+      stringBuilder.RepresentEvents(EventLog.DrainAll());
+      if (stringBuilder.Length > 0)
+      {
+        SendContext($"These events happened during a context switch:\n{stringBuilder}", true);
       }
       var oldhandler = ActionExecutor.GetHandlers().GetValueOrDefault(lastContext);
       if (oldhandler != null && oldhandler is IOnContextSwitch switchHandler)
@@ -226,15 +226,33 @@ public class NeuroIntegration : Node
       else
       {
         // Force an action for every action
-        var force = new ActionsForce("It's your turn. Please take an action.", null, true, ActionsForce.Priority.Low, CommandsList.Commands);
         GodotMainThread.RunAsync(async () =>
          {
+           var currentCommandslist = CommandsList.Commands.ToList();
+           var oldGlobalActions = GlobalActions.ToList();
+           var force = new ActionsForce("It's your turn. Please take an action.", null, true, ActionsForce.Priority.Low, currentCommandslist.ToList());
            await Task.Delay(1000);
+           if (currentCommandslist.Except(CommandsList.Commands).Any() || !currentCommandslist.All(cmd => CommandsList.Commands.Contains(cmd)))
+           {
+             Plugin.LogDebug("Not sending force, Action Window has changed");
+             return;
+           }
+           if (!oldGlobalActions.All(action => GlobalActions.Contains(action)))
+           {
+             Plugin.LogDebug("Not sending force, Global Actions have changed");
+             return;
+           }
            WebsocketConnection.Instance!.Send(force);
          });
       }
       if (hasNonPersistant)
         lastWindow.Register();
+      else
+      {
+        //Send Context manually. as the Action Window won't send it itself
+        if (!string.IsNullOrEmpty(contextReturn.Message))
+          SendContext(contextReturn.Message, contextReturn.Silent);
+      }
 
     }
     else
