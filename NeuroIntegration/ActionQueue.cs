@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NeuroSdk.Websocket;
@@ -14,6 +15,8 @@ namespace STS2NeuroIntegration;
 public class ActionQueue
 {
     public const int MaxQueueSize = 4;
+
+    private string discardedActionText;
 
     private readonly object _lock = new();
     private readonly Queue<ActionEntry> _queue = new();
@@ -125,6 +128,26 @@ public class ActionQueue
                 var entry = _queue.Dequeue();
                 entry.CtsRegistration.Dispose();
             }
+        }
+    }
+
+    public void AddToDiscardedActionText(string text)
+    {
+        lock (_lock)
+        {
+            discardedActionText += text + "\n";
+        }
+    }
+
+    public void SendDiscardedActionText()
+    {
+        lock (_lock)
+        {
+            if (!string.IsNullOrEmpty(discardedActionText))
+            {
+                NeuroIntegration.SendContext($"# Discarded Actions\n{discardedActionText} Please try the actions again if still relevant.", false);
+            }
+            discardedActionText = "";
         }
     }
 
