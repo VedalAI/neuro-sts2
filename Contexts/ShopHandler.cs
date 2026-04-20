@@ -25,6 +25,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         internal NButton Button;
     }
     public ContextType Type => ContextType.Shop;
+    bool firstContext = true;
 
     public ContextReturn GetContext(ContextInfo ctx)
     {
@@ -33,13 +34,15 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         if (!ctx.ShopIsOpen)
         {
             stringBuilder.AppendLine("You reached a shop.");
+            firstContext = false;
             return new ContextReturn(stringBuilder.ToString());
         }
         var player = LocalContext.GetMe(ctx.RunState.Players);
         stringBuilder.AppendLine($"You are inside a shop. You have {player!.Gold} gold to spend.");
         stringBuilder.AppendLine("In the shop, you can buy cards, relics, or remove a card from your deck.");
         stringBuilder.AppendLine("Once you are done with your purchases, you can leave the shop and continue your adventure.");
-        return new ContextReturn(stringBuilder.ToString());
+
+        return new ContextReturn(stringBuilder.ToString(), !firstContext);
     }
     public CommandReturn GetCommands(ContextInfo ctx)
     {
@@ -94,6 +97,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
             if (button == null)
                 return ExecutionResult.Failure("Couldn't find the Leave button");
             parsedData.Button = button;
+            firstContext = true;
 
         }
         else if (action.Name.StartsWith("shop_buy_"))
