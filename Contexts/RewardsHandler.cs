@@ -49,9 +49,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         var rewardEntries = GetRewardEntries(rewardsScreen);
         if (rewardEntries.Count <= 0)
         {
-            stringBuilder.AppendLine("## You are on a Rewards screen");
-            stringBuilder.AppendLine("All claimable rewards are gone. You can proceed.");
-            return new ContextReturn(stringBuilder.ToString());
+            return new ContextReturn(string.Empty);
         }
 
         stringBuilder.AppendLine("## You are on a Rewards screen");

@@ -117,6 +117,18 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
 
         stringBuilder.AppendLine("");
         stringBuilder.AppendLine($"There are {combatState.Enemies.Count} Enemies:");
+        //Do a safety check if round is finished due to killing an enemy
+        if (combatState.Enemies.Count <= 0)
+        {
+            var newStringBuilder = new StringBuilder();
+            var afterEndEvents = EventLog.DrainAll();
+            if (afterEndEvents.Count > 0)
+            {
+                newStringBuilder.AppendLine($"After killing the last enemy, this happened:");
+                newStringBuilder.RepresentEvents(afterEndEvents);
+            }
+            return new ContextReturn(newStringBuilder.ToString(), true);
+        }
         PrettyRenderEnemies(stringBuilder, combatState.Enemies, combatState);
         var allies = combatState.Allies.Where(c => c.IsAlive && c != player.Creature);
         if (allies.Any())
