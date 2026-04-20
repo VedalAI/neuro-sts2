@@ -161,6 +161,10 @@ public class NeuroIntegration : Node
     {
       return;
     }
+    if (lastWindow?.CurrentState == ActionWindow.State.Forced)
+    {
+      return;
+    }
     if (handler.GetCommands(ctx) is CommandReturn CommandsList)
     {
       var contextReturn = handler.GetContext(ctx);
