@@ -319,16 +319,18 @@ public static class GameContext
         {
             var map = runState.Map;
             var visited = runState.VisitedMapCoords;
+            if (map == null)
+                return [];
             if (visited.Count == 0)
-                return new List<MegaCrit.Sts2.Core.Map.MapPoint> { map.StartingMapPoint };
+                return [map.StartingMapPoint];
 
             var lastCoord = visited[visited.Count - 1];
             return map.GetPoint(lastCoord)?.Children.ToList()
-                   ?? new List<MegaCrit.Sts2.Core.Map.MapPoint>();
+                   ?? [];
         }
         catch
         {
-            return new List<MegaCrit.Sts2.Core.Map.MapPoint>();
+            return [];
         }
     }
 

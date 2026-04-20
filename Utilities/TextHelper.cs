@@ -56,7 +56,15 @@ public static class TextHelper
         foreach (char c in name)
         {
             if (_urlUnsafeChars.TryGetValue(c, out var replacement))
-                sb.Append($"_{replacement}");
+            {
+
+                if (replacement != "_")
+                    sb.Append($"_{replacement}");
+                else
+                {
+                    sb.Append($"{replacement}");
+                }
+            }
             else
                 sb.Append(c);
         }

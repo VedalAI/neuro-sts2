@@ -10,6 +10,7 @@ using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.AutoSlay.Helpers;
 using Sts2Agent.Contexts;
+using Sts2Agent.Utilities;
 
 namespace Sts2Agent;
 
@@ -117,7 +118,7 @@ public static class GameStabilityDetector
     {
         if (_pendingCheck) return;
         _pendingCheck = true;
-        StabilityCallable.CallDeferred();
+        GodotMainThread.RunAsync(() => StabilityCallable.Call());
     }
 
     private static void CheckStability()
@@ -154,8 +155,7 @@ public static class GameStabilityDetector
     {
         if (_pendingCheck) return;
         _pendingCheck = true;
-        var tree = Engine.GetMainLoop() as SceneTree;
-        if (tree == null)
+        if (Engine.GetMainLoop() is not SceneTree tree)
         {
             Plugin.LogDebug("ScheduleDelayedCheck: SceneTree is null, clearing _pendingCheck to avoid deadlock");
             _pendingCheck = false;
@@ -195,7 +195,8 @@ public static class GameStabilityDetector
                         Plugin.Log("Map overlay stuck open after travel — closing");
                         ms.Close();
                     }
-                    Plugin.LogDebug($"IsStable: map screen, travel not enabled (traveling={ms?.IsTraveling}) → false");
+                    if (ms != null)
+                        Plugin.LogDebug($"IsStable: map screen, travel not enabled (traveling={ms?.IsTraveling}) → false");
                     return false;
                 }
 
