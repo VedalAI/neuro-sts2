@@ -168,7 +168,8 @@ public class NeuroIntegration : Node
     if (handler.GetCommands(ctx) is CommandReturn CommandsList)
     {
       var contextReturn = handler.GetContext(ctx);
-      lastWindow?.End();
+      if (lastWindow?.CurrentState == ActionWindow.State.Registered)
+        lastWindow?.End();
       if (CommandsList.Commands.Count == 0)
       {
         if (!string.IsNullOrEmpty(contextReturn.Message))
@@ -245,18 +246,22 @@ public class NeuroIntegration : Node
            if (currentCommandslist.Except(CommandsList.Commands).Any() || !currentCommandslist.All(cmd => CommandsList.Commands.Contains(cmd)))
            {
              Plugin.LogDebug("Not sending force, Action Window has changed");
+             GameStabilityDetector.ResetWasStable();
+             GameStabilityDetector.ScheduleStabilityCheck();
              return;
            }
            if (!oldGlobalActions.All(action => GlobalActions.Contains(action)))
            {
              Plugin.LogDebug("Not sending force, Global Actions have changed");
+             GameStabilityDetector.ResetWasStable();
+             GameStabilityDetector.ScheduleStabilityCheck();
              return;
            }
            if (!string.IsNullOrEmpty(contextReturn.Message))
              SendContext(contextReturn.Message, contextReturn.Silent);
-           WebsocketConnection.Instance!.Send(force);
            if (hasNonPersistant)
              lastWindow.Register();
+           WebsocketConnection.Instance!.Send(force);
          });
       }
 
