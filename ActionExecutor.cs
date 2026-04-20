@@ -27,10 +27,8 @@ public static class ActionExecutor
     {
 
         parsedData = null;
-        Plugin.LogDebug($"Validating action: {action.Name} with data: {data.Data?.ToJsonString()} parsing {parsedData?.ToString()}");
         try
         {
-
             var ctx = GameContext.Resolve();
             if (ctx == null)
                 return ExecutionResult.Failure("No active run or interactive screen");
@@ -47,8 +45,9 @@ public static class ActionExecutor
                     action.ActionWindow?.End();
                     GameStabilityDetector.ResetWasStable();
                     NeuroIntegration.UnregisterAllActions();
-                    GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
+                    GameStabilityDetector.ScheduleStabilityCheck();
                 }
+                Plugin.LogDebug($"Validation Result for action: {action.Name} is {result.Successful} with message: {result.Message}");
                 return result;
             }
 
@@ -71,7 +70,6 @@ public static class ActionExecutor
         }
         else
         {
-
             enqueuedActions.Enqueue(constructedAction);
         }
         GameStabilityDetector.ResetWasStable();
@@ -136,6 +134,7 @@ public static class ActionExecutor
                     {
                         Plugin.LogError($"[CRITICAL] Action has Errored during Execution with Message: {result.Message}, The Validation or Execution are wrong for handler of action: {action.Name}");
                     }
+                    Plugin.LogDebug($"Finished Executing Action: {action.Name}, scheduling stability check...");
                     GameStabilityDetector.ScheduleStabilityCheck();
                 });
                 return;
