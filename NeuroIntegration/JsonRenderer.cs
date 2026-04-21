@@ -21,6 +21,15 @@ public static class Renderer
             stringBuilder.AppendLine(line);
         }
     }
+    public static void GetIndexedCardNames(this StringBuilder stringBuilder, IEnumerable<CardModel> cards)
+    {
+        int index = 0;
+        foreach (var card in cards)
+        {
+            stringBuilder.AppendLine($"[{index}] {TextHelper.StripBBCode(card.Title)}");
+            index++;
+        }
+    }
     public static void RepresentRelics(this StringBuilder stringBuilder, IEnumerable<RelicModel> relics)
     {
 

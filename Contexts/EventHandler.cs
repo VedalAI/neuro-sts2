@@ -120,7 +120,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
         {
             commands.Add(new("select_event_option", "Select an option in the event", QJS.WrapObject(new Dictionary<string, JsonSchema>
             {
-                ["option"] = QJS.Enum(evt.CurrentOptions.Where((x) => !x.IsLocked).Select((x) => x.Title.GetUnformatedText()))
+                ["option_index"] = QJS.Type(JsonSchemaType.Integer)
             })));
         }
 
@@ -157,23 +157,25 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
 
             return ExecutionResult.Unstable("Couldn't find a proceed button. You are most likely stuck here...");
         }
-        var optionName = data?.Data?["option"]?.GetValue<string>() ?? ""; //TODO: Figure out if this is good enough.
-
+        var optionIndex = data.GetValue("option_index", -1);
+        if (optionIndex < 0)
+        {
+            return ExecutionResult.Failure("Invalid option index");
+        }
 
         var allButtons = UiHelper.FindAll<NEventOptionButton>(sceneRoot);
 
         // Buttons are added to the container in CurrentOptions order,
         // so tree-order index matches the event option index
-        var button = allButtons.Find((btn) => btn.Option.Title.GetUnformatedText() == optionName);
-
+        var button = allButtons.ElementAtOrDefault(optionIndex);
         if (button == null)
         {
-            Plugin.LogDebug($"Event button lookup: requested={optionName}, found={allButtons.Count} buttons");
-            return ExecutionResult.Unstable($"Event option '{optionName}' not found");
+            Plugin.LogDebug($"Event button lookup: requested index={optionIndex}, found={allButtons.Count} buttons");
+            return ExecutionResult.Unstable($"Event option at index '{optionIndex}' not found");
         }
         if (button.Option.IsLocked)
         {
-            return ExecutionResult.Failure($"Event option '{optionName}' is locked");
+            return ExecutionResult.Failure($"Event option at index '{optionIndex}' is locked");
         }
         parsedData.Button = button;
 

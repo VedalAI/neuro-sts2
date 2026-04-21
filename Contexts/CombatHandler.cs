@@ -195,107 +195,55 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         var pcs = player.PlayerCombatState;
         if (pcs == null) return new CommandReturn();
 
+        var prompt = new StringBuilder();
+        prompt.AppendLine("Its your turn, please do an action");
+
         //If there is only 1 Target no need to make it more difficult for llms
         if (ctx.CombatState!.HittableEnemies.Count > 1)
         {
-#if !ALTERNATIVE_ACTIONS
-            var enemy_target_cards = pcs.Hand.Cards.Where((x) => x.TargetType == TargetType.AnyEnemy && x.CanPlay()).DistinctBy(x => x.Title);
-            var none_target_cards = pcs.Hand.Cards.Where((x) => x.TargetType is not (TargetType.AnyAlly or TargetType.AnyEnemy) && x.CanPlay()).DistinctBy(x => x.Title);
+            var enemy_target_cards = pcs.Hand.Cards.Where((x) => x.TargetType == TargetType.AnyEnemy && x.CanPlay());
+            var none_target_cards = pcs.Hand.Cards.Where((x) => x.TargetType is not (TargetType.AnyAlly or TargetType.AnyEnemy) && x.CanPlay());
 
             if (enemy_target_cards.Any())
             {
-                commands.Add(new("play_enemy_target_card", "Select a card that requires a enemy Target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+                commands.Add(new("play_card_on_enemy", "Play a card on the target enemy", QJS.WrapObject(new Dictionary<string, JsonSchema>()
                 {
-                    ["card"] = QJS.Enum(enemy_target_cards.Select(x => x.Title)),
-                    ["target"] = QJS.Enum(ctx.CombatState.HittableEnemies.GetUniqueNames())
+                    ["card_index"] = QJS.Type(JsonSchemaType.Integer),
+                    ["target_index"] = QJS.Type(JsonSchemaType.Integer)
                 })));
             }
             if (none_target_cards.Any())
             {
-                commands.Add(new("play_card", "Select a card to play", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+                commands.Add(new("play_card", "Play a card", QJS.WrapObject(new Dictionary<string, JsonSchema>()
                 {
-                    ["card"] = QJS.Enum(none_target_cards.Select(x => x.Title))
+                    ["card_index"] = QJS.Type(JsonSchemaType.Integer)
                 })));
             }
             if (player.Potions.Any())
             {
                 var targeted_potions = player.Potions.Where((p) => p.TargetType is (TargetType.AnyEnemy or TargetType.TargetedNoCreature));
                 if (targeted_potions.Any())
-                    commands.Add(new("use_target_potion", "Use a potion on a target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+                    commands.Add(new("use_potion_on_enemy", "Use a potion on a target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
                     {
-                        ["potion"] = QJS.Enum(targeted_potions.Select((x) => TextHelper.SafeLocString(() => x.Title)).Distinct()),
-                        ["target"] = QJS.Enum(ctx.CombatState!.HittableEnemies.GetUniqueNames())
+                        ["potion_index"] = QJS.Type(JsonSchemaType.Integer),
+                        ["target_index"] = QJS.Type(JsonSchemaType.Integer)
                     }
                     )));
                 var none_targeted_potions = player.Potions.Where((p) => p.TargetType is not (TargetType.AnyEnemy or TargetType.TargetedNoCreature));
-
                 if (none_targeted_potions.Any())
                     commands.Add(new("use_potion", "Use a potion", QJS.WrapObject(new Dictionary<string, JsonSchema>()
                     {
-                        ["potion"] = QJS.Enum(none_targeted_potions.Select((x) => TextHelper.SafeLocString(() => x.Title)).Distinct()),
+                        ["potion_index"] = QJS.Type(JsonSchemaType.Integer)
                     }
                     )));
             }
-#else
-            foreach (var card in pcs.Hand.Cards.Where(x => x.CanPlay()).DistinctBy(x => x.Title))
-            {
-                var actionName = $"play_card_{TextHelper.GetActionNameFor(card.Title)}";
-                if (_invalidatedActions.Contains(actionName))
-                    continue;
-
-                var action = new ConstructedAction(actionName, $"{TextHelper.GetCardDescriptionFor(card, PileType.Hand).AsSingleLine()}", persistant_action: true);
-
-                if (card.TargetType == TargetType.AnyEnemy)
-                {
-                    action.SetSchema(QJS.WrapObject(new Dictionary<string, JsonSchema>()
-                    {
-                        ["target"] = QJS.Enum(ctx.CombatState!.HittableEnemies.GetUniqueNames())
-                    }));
-                }
-                else if (card.TargetType == TargetType.AnyAlly)
-                {
-                    action.SetSchema(QJS.WrapObject(new Dictionary<string, JsonSchema>()
-                    {
-                        ["target"] = QJS.Enum(ctx.CombatState.Allies.GetUniqueNames())
-                    }));
-                }
-
-                commands.Add(action);
-            }
-            foreach (var potion in player.Potions)
-            {
-                var actionName = $"use_potion_{potion.Title.GetActionName()}";
-                if (_invalidatedActions.Contains(actionName))
-                    continue;
-
-                var action = new ConstructedAction(actionName, $"{potion.DynamicDescription.AsSingleLine()}", persistant_action: true);
-
-                if (potion.TargetType == TargetType.AnyEnemy)
-                {
-                    action.SetSchema(QJS.WrapObject(new Dictionary<string, JsonSchema>()
-                    {
-                        ["target"] = QJS.Enum(ctx.CombatState!.HittableEnemies.GetUniqueNames())
-                    }));
-                }
-                else if (potion.TargetType == TargetType.AnyAlly)
-                {
-                    action.SetSchema(QJS.WrapObject(new Dictionary<string, JsonSchema>()
-                    {
-                        ["target"] = QJS.Enum(ctx.CombatState.Allies.GetUniqueNames())
-                    }));
-                }
-                commands.Add(action);
-            }
-#endif
-
         }
         else
         {
-#if !ALTERNATIVE_ACTIONS
             if (pcs.Hand.Cards.Any(x => x.CanPlay()))
-                commands.Add(new("play_card", "Select a card to play", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+                commands.Add(new("play_card", "Play a card", QJS.WrapObject(new Dictionary<string, JsonSchema>()
                 {
-                    ["card"] = QJS.Enum(pcs.Hand.Cards.Where(x => x.CanPlay()).Select(x => x.Title).Distinct())
+                    ["card_index"] = QJS.Type(JsonSchemaType.Integer)
                 }
                 )));
             if (player.Potions.Any())
@@ -303,51 +251,24 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
 
                 commands.Add(new("use_potion", "Use a potion", QJS.WrapObject(new Dictionary<string, JsonSchema>()
                 {
-                    ["potion"] = QJS.Enum(player.Potions.Select((x) => TextHelper.SafeLocString(() => x.Title)).Distinct()),
+                    ["potion_index"] = QJS.Type(JsonSchemaType.Integer),
                 }
                 )));
             }
-#else
-            foreach (var card in pcs.Hand.Cards.Where((x) => x.CanPlay()).DistinctBy(x => x.Title))
-            {
-                var actionName = $"play_card_{TextHelper.GetActionNameFor(card.Title)}";
-                if (_invalidatedActions.Contains(actionName))
-                    continue;
-                commands.Add(new(actionName, $"{TextHelper.GetCardDescriptionFor(card, PileType.Hand).AsSingleLine()}", persistant_action: true));
-            }
-            foreach (var potion in player.Potions)
-            {
-                var actionName = $"use_potion_{potion.Title.GetActionName()}";
-                if (_invalidatedActions.Contains(actionName))
-                    continue;
-                commands.Add(new(actionName, $"{potion.DynamicDescription.AsSingleLine()}", persistant_action: true));
-
-            }
-
-#endif
         }
-#if !ALTERNATIVE_ACTIONS
         //TODO: this might require changes for multiplayer as. there are TargetType.AnyPlayer too
         var ally_target_cards = pcs.Hand.Cards.Where((x) => x.TargetType == TargetType.AnyAlly && x.CanPlay()).Select(x => x.Title).Distinct();
         if (ally_target_cards.Any() && ctx.CombatState?.Allies.Count > 0)
         {
 
-            commands.Add(new("play_ally_target_card", "Select a card that requires an allied target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+            commands.Add(new("play_card_on_ally", "Select a card that requires an allied target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
-                ["card"] = QJS.Enum(ally_target_cards),
-                ["target"] = QJS.Enum(ctx.CombatState.Allies.GetUniqueNames())
+                ["card_index"] = QJS.Type(JsonSchemaType.Integer),
+                ["ally_index"] = QJS.Type(JsonSchemaType.Integer)
             })));
         }
-#endif
-
         if (!_invalidatedActions.Contains("end_turn"))
             commands.Add(new("end_turn", "Ends your current turn", persistant_action: true));
-
-        // if (firstContext)
-        // {
-        //     var context = getContext(ctx);
-        //     NeuroIntegration.SendContext(context.Message, false);
-        // }
 
         return new CommandReturn(commands, ForceWindow: false);
     }
@@ -361,22 +282,14 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         if (!cm.IsPlayPhase || !cm.IsInProgress) return ExecutionResult.ModFailure("Not in play phase");
         var player = LocalContext.GetMe(ctx.RunState.Players);
         if (player == null) return ExecutionResult.ModFailure("Player not found");
-#if !ALTERNATIVE_ACTIONS
-        if (action.Name == "play_enemy_target_card" || action.Name == "play_ally_target_card" || action.Name == "play_card")
-#else
-        if (action.Name.StartsWith("play_card_"))
-#endif
+        if (action.Name.StartsWith("play_card"))
         {
             var result = ValidateSingleCard(action, data, ref parsedData, ctx);
             if (result.Successful && !_isRevalidation)
                 InvalidateFutureActions(action, parsedData, player, ctx);
             return result;
         }
-#if !ALTERNATIVE_ACTIONS
-        else if (action.Name == "use_potion" || action.Name == "use_target_potion")
-#else
         else if (action.Name.StartsWith("use_potion_"))
-#endif
         {
             var result = ValidatePotion(action, data, ref parsedData, ctx);
             if (result.Successful && !_isRevalidation)
@@ -536,24 +449,16 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
     }
     public ExecutionResult ValidatePotion(ConstructedAction action, ActionJData data, ref Result parsedData, ContextInfo ctx)
     {
-#if !ALTERNATIVE_ACTIONS
-        var slot = data.Data?["potion"]?.GetValue<string>();
-#else
-        var slot = action.Name.Replace("use_potion_", "");
-#endif
-        if (slot == null)
+        var slot = data.GetValue("potion_index", -1);
+        if (slot < 0)
             return ExecutionResult.Failure("No potion specified");
         var player = LocalContext.GetMe(ctx.RunState!.Players);
         if (player == null)
             return ExecutionResult.ModFailure("Couldn't find player");
         var potions = player.PotionSlots;
-#if !ALTERNATIVE_ACTIONS
-        var potion = potions.FirstOrDefault((p) => TextHelper.SafeLocString(() => p?.Title ?? new("","")) == slot);
-#else
-        var potion = potions.FirstOrDefault(p => TextHelper.GetActionNameFor(TextHelper.SafeLocString(() => p?.Title ?? new("", ""))) == slot);
-#endif
+        var potion = potions.ElementAtOrDefault(slot);
         if (potion == null)
-            return ExecutionResult.Failure($"No potion named '{slot}'");
+            return ExecutionResult.Failure($"No potion at index '{slot}'");
 
         Plugin.LogDebug("Setting potion");
         parsedData.Potion = potion;
@@ -567,9 +472,9 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             if (combatState != null)
             {
                 var aliveEnemies = combatState.HittableEnemies.ToList();
-                if (data.Data?["target"]?.GetValue<string>() is string targetIndex)
+                if (data.GetValue("target_index", -1) is int targetIndex && targetIndex >= 0)
                 {
-                    target = aliveEnemies.GetUniqueCreature(targetIndex!);
+                    target = aliveEnemies.ElementAtOrDefault(targetIndex);
                 }
                 else
                 {
@@ -592,11 +497,9 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
     public ExecutionResult ValidateSingleCard(ConstructedAction action, ActionJData data, ref Result parsedData, ContextInfo ctx)
     {
 
-#if !ALTERNATIVE_ACTIONS
-        var cardIndex = data.Data?["card"]?.GetValue<string>();
-#else
-        var cardIndex = action.Name.Replace("play_card_", "");
-#endif
+        var cardIndex = data.GetValue("card_index", -1);
+        if (cardIndex < 0)
+            return ExecutionResult.Failure("No card index specified");
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var pcs = player?.PlayerCombatState;
         if (pcs == null) return ExecutionResult.Failure("No player combat state");
@@ -604,17 +507,13 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         var hand = pcs.Hand.Cards;
         if (hand == null || hand.Count <= 0)
             return ExecutionResult.Failure("The hand is not valid");
-#if !ALTERNATIVE_ACTIONS
-        var card = hand.FirstOrDefault((x) => x.Title == cardIndex && x.CanPlay());
-#else
-        // select the card that is the cheapest and if it can be played and is named correctly
-        var card = hand.OrderBy(x => x.EnergyCost.GetAmountToSpend() + x.CurrentStarCost).FirstOrDefault((x) => TextHelper.GetActionNameFor(x.Title) == cardIndex && x.CanPlay());
-#endif
+        if (cardIndex >= hand.Count)
+            return ExecutionResult.Failure($"Card index {cardIndex} out of range for hand size {hand.Count}");
+        var card = hand[cardIndex];
         if (card == null || !card.CanPlay())
         {
             NeuroIntegration.UnregisterAction(action.Name);
-            return ExecutionResult.Failure($"Card '{cardIndex}' cannot be played");
-
+            return ExecutionResult.Failure($"Card at index '{cardIndex}' cannot be played");
         }
 
         var combatState = card?.CombatState;
@@ -630,16 +529,13 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         Creature? target = null;
         if (card!.TargetType == TargetType.AnyEnemy)
         {
-            if (data.Data?["target"]?.GetValue<string>() is string targetIndex)
+            if (data.GetValue("target_index", -1) is int targetIndex && targetIndex >= 0)
             {
                 Plugin.LogDebug($"target: {targetIndex}");
-                target = aliveEnemies.GetUniqueCreature(targetIndex!);
+                if (targetIndex >= aliveEnemies.Count)
+                    return ExecutionResult.Failure($"Target index {targetIndex} out of range for alive enemies count {aliveEnemies.Count}");
+                target = aliveEnemies[targetIndex];
                 var unique = aliveEnemies.CreaturesAreDistinct();
-                for (int i = 0; i < aliveEnemies.Count; i++)
-                {
-                    Creature? targets = aliveEnemies[i];
-                    Plugin.LogDebug($"all_enemies: {targets.GetUniqueName(unique, i)}");
-                }
                 Plugin.LogDebug($"found target: {target}");
             }
             else
@@ -652,8 +548,8 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         else if (card.TargetType == TargetType.AnyAlly)
         {
             var allies = combatState.Allies.Where(c => c != null && c.IsAlive && c.IsPlayer && c != card.Owner.Creature);
-            target = data.Data?["target"]?.GetValue<string>() is string tp
-                ? allies.FirstOrDefault((a) => a.Name == tp)
+            target = data.GetValue("ally_index", -1) is int tp && tp >= 0
+                ? allies.ElementAtOrDefault(tp)
                 : allies.FirstOrDefault();
         }
         parsedData.Target = target;
@@ -703,15 +599,6 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
 
         try
         {
-#if !ALTERNATIVE_ACTIONS
-            var execResult = action.Name switch
-            {
-                "play_enemy_target_card" or "play_ally_target_card" or "play_card" => await PlayCard(freshResult, freshCtx),
-                "end_turn" => await EndTurn(freshCtx),
-                "use_potion" or "use_target_potion" => UsePotion(freshResult, freshCtx),
-                _ => null
-            };
-#else
             ExecutionResult? execResult;
             if (action.Name.StartsWith("play_card"))
             {
@@ -729,7 +616,6 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             {
                 execResult = null;
             }
-#endif
             return execResult;
         }
         finally

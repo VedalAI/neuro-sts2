@@ -82,35 +82,38 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
             catch { }
         }
         Plugin.LogDebug($"min_select: {min_select}, max_select:{max_select}");
+        var prompt = new StringBuilder();
         if (max_select > 1)
         {
             commands.Add(new("select_multiple_cards", min_select != max_select ? $"Select {min_select} up to {max_select} cards" : $"Select {max_select} cards", QJS.WrapObject(new Dictionary<string, JsonSchema>
             {
-                ["cards"] = new()
+                ["card_index"] = new()
                 {
                     Type = JsonSchemaType.Array,
                     MinItems = min_select,
                     MaxItems = max_select,
-                    Items = QJS.Enum(cardHolders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
+                    Items = QJS.Type(JsonSchemaType.Integer)
                 }
             })));
+            prompt.AppendLine($"Select {min_select} to {max_select} cards, Your current cards are:");
         }
         else
         {
             commands.Add(new("select_card", "Select an available card", QJS.WrapObject(new Dictionary<string, JsonSchema>
             {
-                ["card"] = QJS.Enum(cardHolders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
+                ["card_index"] = QJS.Type(JsonSchemaType.Integer),
             })));
-
+            prompt.AppendLine("Select a card, Your current cards are:");
         }
 
+        prompt.GetIndexedCardNames(cardHolders.Select(x => x.CardModel!));
         var canSkip = ctx.OverlayScreen is NCardRewardSelectionScreen;
         if (!canSkip && ctx.OverlayNode != null)
             canSkip = UiHelper.FindFirst<NChoiceSelectionSkipButton>(ctx.OverlayNode) != null;
         if (canSkip)
             commands.Add(new("skip", "Skip this selection. No card will be added to your deck."));
 
-        return new CommandReturn(commands);
+        return new CommandReturn(commands, ForceText: prompt.ToString());
     }
 
     public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
@@ -132,8 +135,8 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
         }
         else if (action.Name == "select_card")
         {
-            var cardIndex = data.Data?["card"]?.GetValue<string>();
-            if (cardIndex == null)
+            var cardIndex = data.GetValue("card_index", -1);
+            if (cardIndex < 0)
             {
                 return ExecutionResult.Failure("Missing parameter: card");
             }
@@ -143,12 +146,14 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
             if (holders == null)
                 return ExecutionResult.Failure("No cards are available to select");
 
-            var holder = holders.First((x) => x.CardNode?.Model?.Title == cardIndex);
+            if (cardIndex < 0 || cardIndex >= holders.Count)
+                return ExecutionResult.Failure($"Card index {cardIndex} out of range (available: {holders.Count})");
+
+            var holder = holders[cardIndex];
             if (holder == null)
             {
                 return ExecutionResult.Failure($"Card '{cardIndex}' is not available to select");
             }
-
             result.SelectedCard = holder;
             return ExecutionResult.Success();
         }
@@ -156,8 +161,8 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
         {
 
             var all_nodes = new List<NCardHolder>();
-            var cardIndex = data.Data?["cards"]?.AsArray().GetValues<string>();
-            if (cardIndex == null)
+            var cardIndex = data.GetArray<int>("card_index");
+            if (cardIndex == null || !cardIndex.Any())
             {
                 return ExecutionResult.Failure("Missing parameter: cards");
             }
@@ -169,7 +174,9 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
             foreach (var item in cardIndex)
             {
                 var cardName = item;
-                var holder = holders.FirstOrDefault((x) => x.CardNode?.Model?.Title == cardName && !all_nodes.Contains(x));
+                if (cardName < 0 || cardName >= holders.Count)
+                    return ExecutionResult.Failure($"Card index {cardName} out of range (available: {holders.Count})");
+                var holder = holders[cardName];
                 if (holder == null)
                 {
                     return ExecutionResult.Failure($"Not enough copies of {cardName} are available. Select fewer copies or choose a different card.");

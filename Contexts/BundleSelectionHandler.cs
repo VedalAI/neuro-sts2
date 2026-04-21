@@ -57,20 +57,15 @@ public class BundleSelectionHandler : IContextHandler<BundleSelectionHandler.Res
 
         commands.Add(new("select_bundle", "Select a bundle of cards", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
-            ["bundleIndex"] = new()
-            {
-                Type = JsonSchemaType.Integer,
-                Minimum = 0,
-                Maximum = bundles.Count - 1
-            }
+            ["bundleIndex"] = QJS.Type(JsonSchemaType.Integer)
         })));
 
-        return new CommandReturn(commands);
+        return new CommandReturn(commands, ForceText: "Select a bundle between 0 and " + (bundles.Count - 1));
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
-        var bundleIndex = data.Data?["bundleIndex"]?.GetValue<int>() ?? -1;
+        var bundleIndex = data.GetValue("bundleIndex", -1);
         if (bundleIndex < 0)
             return ExecutionResult.Failure("Bundle index not found");
         var bundles = ctx.Bundles;
