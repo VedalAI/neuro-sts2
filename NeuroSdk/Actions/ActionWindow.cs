@@ -8,6 +8,7 @@ using NeuroSdk.Internal;
 using NeuroSdk.Messages.Outgoing;
 using NeuroSdk.Websocket;
 using Sts2Agent;
+using Sts2Agent.Contexts;
 
 namespace NeuroSdk.Actions
 {
@@ -19,16 +20,20 @@ namespace NeuroSdk.Actions
         #region Creation
 
         private static bool _isCreatedCorrectly = false;
+        private ContextInfo? _contextInfo;
 
         /// <summary>
         /// Creates a new ActionWindow. If the parent is destroyed, this ActionWindow will be automatically ended.
         /// </summary>
-        public static ActionWindow Create(Node parent)
+        public static ActionWindow Create(Node parent, ContextInfo? contextInfo)
         {
             try
             {
                 _isCreatedCorrectly = true;
-                var ActionWindow = new ActionWindow();
+                var ActionWindow = new ActionWindow
+                {
+                    _contextInfo = contextInfo
+                };
                 parent.AddChild(ActionWindow);
                 return ActionWindow;
             }
@@ -61,6 +66,10 @@ namespace NeuroSdk.Actions
             }
 
             return true;
+        }
+        public bool IsSameContextInfo(ContextInfo contextInfo)
+        {
+            return _contextInfo == contextInfo;
         }
 
         /// <summary>
