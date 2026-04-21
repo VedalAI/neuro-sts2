@@ -20,7 +20,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
 {
     public class Result : IContextResult
     {
-        internal NHandCardHolder Card;
+        internal List<NHandCardHolder> Cards;
         internal NConfirmButton ConfirmButton;
     }
     public ContextType Type => ContextType.HandSelection;
@@ -85,7 +85,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
                 Type = JsonSchemaType.Array,
                 MinItems = min_select,
                 MaxItems = max_select,
-                Items = QJS.Enum(holders.Select((x) => x.CardNode!.Model!.Title).Distinct()),
+                Items = QJS.Type(JsonSchemaType.Integer),
             }
         })));
 
@@ -110,7 +110,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
             if (hand == null || !hand.IsInCardSelection)
                 return ExecutionResult.ModFailure("Hand is not in card selection mode");
 
-            var cardIndex = data.Data?["cards"]?.AsArray().GetValues<string>();
+            var cardIndex = data.GetArray<int>("cards");
             if (cardIndex == null)
                 return ExecutionResult.Failure("Missing parameter: cards");
             var cardname = cardIndex.FirstOrDefault();
@@ -120,11 +120,17 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
             if (holders == null)
                 return ExecutionResult.ModFailure("Couldn't find the hand to select from");
 
-            var holder = holders.FirstOrDefault(e => e.CardNode?.Model?.Title == cardname);
-            if (holder == null)
-                return ExecutionResult.Failure($"Couldn't find card with name {cardname}");
-            parsedData.Card = holder;
-            return ExecutionResult.Success("Hand card selected");
+
+            var held_cards = new List<NHandCardHolder>();
+            foreach (var index in cardIndex)
+            {
+                if (index < 0 || index >= holders.Count)
+                    return ExecutionResult.Failure($"Card index {index} out of range (available: {holders.Count})");
+                held_cards.Add(holders[index]);
+
+            }
+            parsedData.Cards = held_cards;
+            return ExecutionResult.Success();
         }
         else
         {
@@ -135,8 +141,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
             if (ReflectionCache.HandConfirmButton == null)
                 return ExecutionResult.Failure("Cannot access confirm button");
 
-            var confirmButton = ReflectionCache.HandConfirmButton.GetValue(hand) as NConfirmButton;
-            if (confirmButton == null || !confirmButton.IsEnabled)
+            if (ReflectionCache.HandConfirmButton.GetValue(hand) is not NConfirmButton confirmButton || !confirmButton.IsEnabled)
                 return ExecutionResult.Failure("Confirm button is not enabled (need to select more cards?)");
             parsedData.ConfirmButton = confirmButton;
 
@@ -157,12 +162,14 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
     private async Task<ExecutionResult> ChooseHandCard(Result root, ContextInfo ctx)
     {
 
-        await GodotMainThread.RunAsync(() =>
+        foreach (var item in root.Cards)
         {
-            Plugin.LogDebug($"ChooseHandCards: emitting Pressed on holder for '{root.Card.CardNode?.Model?.Title}'");
-            root.Card.EmitSignal(NCardHolder.SignalName.Pressed, root.Card);
-        });
-        Plugin.Log($"Chose hand card {root.Card.CardNode?.Model?.Title}");
+            await GodotMainThread.RunAsync(() =>
+            {
+                Plugin.LogDebug($"ChooseHandCards: emitting Pressed on holder for '{item.CardNode?.Model?.Title}'");
+                item.EmitSignal(NCardHolder.SignalName.Pressed, item);
+            });
+        }
         return ExecutionResult.Success("Hand card selected");
     }
 

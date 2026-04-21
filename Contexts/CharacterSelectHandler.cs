@@ -44,20 +44,20 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
         var commands = new List<ConstructedAction>();
         if (ctx.CharacterButtons == null) return new CommandReturn();
 
-        var character_names = new List<string>();
+        var prompt = new StringBuilder();
+        prompt.AppendLine("Select a character to start your run with:");
 
         for (int i = 0; i < ctx.CharacterButtons.Count; i++)
         {
             var btn = ctx.CharacterButtons[i];
             if (!GodotObject.IsInstanceValid(btn) || btn.IsLocked) continue;
-            character_names.Add(GetCharacterName(btn));
+            prompt.AppendLine($"- [{i}] {GetCharacterName(btn)}");
         }
         commands.Add(new ConstructedAction("select_character", "Select a different character at the start of your run", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
-            ["character"] = QJS.Enum(character_names)
+            ["character_index"] = QJS.Type(JsonSchemaType.Integer)
         }
         )));
-
 
         if (ctx.CharacterSelectScreen != null && GodotObject.IsInstanceValid(ctx.CharacterSelectScreen))
         {
@@ -74,8 +74,11 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
     {
         if (action.Name == "select_character")
         {
-            var character_name = data.GetValue<string>("character");
-            var btn = ctx?.CharacterButtons?.Find((btn) => GetCharacterName(btn) == character_name);
+            var character_index = data.GetValue("character_index", -1);
+            if (character_index < 0)
+                return ExecutionResult.Failure("Character index not found");
+
+            var btn = ctx?.CharacterButtons?.ElementAtOrDefault(character_index);
             if (!GodotObject.IsInstanceValid(btn))
                 return ExecutionResult.Failure("Character not found");
             if (btn.IsLocked)
