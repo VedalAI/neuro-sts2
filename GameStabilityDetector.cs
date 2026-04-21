@@ -11,6 +11,9 @@ using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.AutoSlay.Helpers;
 using Sts2Agent.Contexts;
 using Sts2Agent.Utilities;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
+using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
+using MegaCrit.Sts2.Core.Nodes.RestSite;
 
 namespace Sts2Agent;
 
@@ -235,6 +238,24 @@ public static class GameStabilityDetector
                 }
 
             case ContextType.RestSite:
+                if (ctx.RestSiteRoom != null && NRestSiteRoom.Instance is NRestSiteRoom restSite)
+                {
+                    if (UiHelper.FindFirst<NProceedButton>(restSite) is NProceedButton proceedBtn && proceedBtn.Visible && proceedBtn.IsEnabled)
+                    {
+                        var proceedEnabled = proceedBtn.IsEnabled;
+                        Plugin.LogDebug($"IsStable Restsite: proceed button enabled={proceedEnabled} → {proceedEnabled}");
+                        return proceedEnabled;
+                    }
+                    if (UiHelper.FindAll<NRestSiteButton>(restSite) is IEnumerable<NRestSiteButton> anyBtn && anyBtn.Any(b => b.Visible && b.IsEnabled))
+                    {
+                        var anyBtnEnabled = anyBtn.Any(b => b.Visible && b.IsEnabled);
+                        Plugin.LogDebug($"IsStable Restsite: any button enabled={anyBtnEnabled} → {anyBtnEnabled}");
+                        return anyBtnEnabled;
+                    }
+                }
+
+                Plugin.LogDebug($"IsStable Restsite: {ctx.Type} → false");
+                return false;
             case ContextType.Shop:
                 Plugin.LogDebug($"IsStable: {ctx.Type} → true");
                 return true;
