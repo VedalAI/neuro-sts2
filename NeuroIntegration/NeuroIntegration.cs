@@ -169,7 +169,7 @@ public class NeuroIntegration : Node
       }
       return;
     }
-    if (lastWindow?.CurrentState == ActionWindow.State.Forced)
+    if (lastWindow?.CurrentState == ActionWindow.State.Forced && lastWindow.IsSameContextInfo(ctx))
     {
       StabilityCheckCounter++;
       if (StabilityCheckCounter >= 20)
@@ -185,8 +185,7 @@ public class NeuroIntegration : Node
     if (handler.GetCommands(ctx) is CommandReturn CommandsList)
     {
       var contextReturn = handler.GetContext(ctx);
-      if (lastWindow?.CurrentState == ActionWindow.State.Registered)
-        lastWindow?.End();
+      lastWindow?.End();
       if (CommandsList.Commands.Count == 0)
       {
         if (!string.IsNullOrEmpty(contextReturn.Message))
@@ -213,7 +212,7 @@ public class NeuroIntegration : Node
         Plugin.LogDebug("Context Handler requested to Skip, not sending Action Window");
         return;
       }
-      lastWindow = ActionWindow.Create(this).SetContext(contextReturn.Message, contextReturn.Silent);
+      lastWindow = ActionWindow.Create(this, ctx).SetContext(contextReturn.Message, contextReturn.Silent);
       var new_global_actions = new List<ConstructedAction>();
       var hasNonPersistant = false;
       foreach (var item in CommandsList.Commands)
@@ -247,39 +246,30 @@ public class NeuroIntegration : Node
         NeuroActionHandler.RegisterActions(new_global_actions);
       if (CommandsList.ForceActionWindow)
       {
-        lastWindow.SetForce(1, "It's your turn. Please take an action.", null);
+        lastWindow.SetForce(0, CommandsList.ForceText, null);
         if (hasNonPersistant)
           lastWindow.Register();
       }
       else
       {
         // Force an action for every action
-        GodotMainThread.RunAsync(async () =>
-         {
-           var currentCommandslist = CommandsList.Commands.ToList();
-           var oldGlobalActions = GlobalActions.ToList();
-           var force = new ActionsForce("It's your turn. Please take an action.", null, true, ActionsForce.Priority.Low, currentCommandslist.ToList());
-           await Task.Delay(1000);
-           if (currentCommandslist.Except(CommandsList.Commands).Any() || !currentCommandslist.All(cmd => CommandsList.Commands.Contains(cmd)))
-           {
-             Plugin.LogDebug("Not sending force, Action Window has changed");
-             GameStabilityDetector.ResetWasStable();
-             GameStabilityDetector.ScheduleStabilityCheck();
-             return;
-           }
-           if (!oldGlobalActions.All(action => GlobalActions.Contains(action)) || GlobalActions.Count <= 0 || CommandsList.Commands.Count <= 0)
-           {
-             Plugin.LogDebug("Not sending force, Global Actions have changed or are empty");
-             GameStabilityDetector.ResetWasStable();
-             GameStabilityDetector.ScheduleStabilityCheck();
-             return;
-           }
-           if (!string.IsNullOrEmpty(contextReturn.Message))
-             SendContext(contextReturn.Message, contextReturn.Silent);
-           if (hasNonPersistant)
-             lastWindow.Register();
-           WebsocketConnection.Instance!.Send(force);
-         });
+        var currentCommandslist = CommandsList.Commands.ToList();
+        var oldGlobalActions = GlobalActions.ToList();
+        var force = new ActionsForce(CommandsList.ForceText, null, true, ActionsForce.Priority.Low, currentCommandslist.ToList());
+        var commandsChanged = currentCommandslist.Except(CommandsList.Commands).Any() || !currentCommandslist.All(CommandsList.Commands.Contains);
+        var globalActionsChanged = !oldGlobalActions.All(GlobalActions.Contains) || GlobalActions.Count <= 0 || CommandsList.Commands.Count <= 0;
+        if (globalActionsChanged || commandsChanged)
+        {
+          Plugin.LogDebug("Not sending force, Global Actions or commands have changed or are empty");
+          GameStabilityDetector.ResetWasStable();
+          GameStabilityDetector.ScheduleStabilityCheck();
+          return;
+        }
+        if (!string.IsNullOrEmpty(contextReturn.Message))
+          SendContext(contextReturn.Message, contextReturn.Silent);
+        if (hasNonPersistant)
+          lastWindow.Register();
+        WebsocketConnection.Instance!.Send(force);
       }
       GodotMainThread.RunAsync(async () => { await Task.Delay(2000); GameStabilityDetector.ScheduleStabilityCheck(); });
     }

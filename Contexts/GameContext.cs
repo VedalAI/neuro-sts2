@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Godot;
 using MegaCrit.Sts2.Core.AutoSlay.Helpers;
@@ -42,7 +43,7 @@ public enum ContextType
     Unknown,
 }
 
-public class ContextInfo
+public class ContextInfo : IEqualityComparer<ContextInfo>
 {
     public ContextType Type { get; init; }
     public RunState? RunState { get; init; }
@@ -85,6 +86,55 @@ public class ContextInfo
     public NCrystalSphereScreen? CrystalSphereScreen { get; init; }
     // Timelines
     public NTimelineScreen? TimelineScreen { get; init; }
+
+    public bool Equals(ContextInfo? x, ContextInfo? y)
+    {
+        // Contexts are considered equal if they have the same type and the same relevant screen or state references (e.g. same combat, same map screen, etc.)
+        if (x == null || y == null) return false;
+        if (x.Type != y.Type) return false;
+
+        return x switch
+        {
+            { Type: ContextType.CharacterSelect } => GodotObject.IsInstanceValid(x.CharacterSelectScreen) && GodotObject.IsInstanceValid(y.CharacterSelectScreen) && x.CharacterSelectScreen == y.CharacterSelectScreen,
+            { Type: ContextType.Map } => true, // Map context is determined by run state, which is already checked by reference equality in RunState
+            { Type: ContextType.HandSelection } => GodotObject.IsInstanceValid(x.Hand) && GodotObject.IsInstanceValid(y.Hand) && x.Hand == y.Hand,
+            { Type: ContextType.CardSelection } => GodotObject.IsInstanceValid(x.OverlayNode) && GodotObject.IsInstanceValid(y.OverlayNode) && x.OverlayNode == y.OverlayNode,
+            { Type: ContextType.Rewards } => GodotObject.IsInstanceValid(x.OverlayNode) && GodotObject.IsInstanceValid(y.OverlayNode) && x.OverlayNode == y.OverlayNode,
+            { Type: ContextType.Combat } => x.CombatState != null && y.CombatState != null && x.CombatState == y.CombatState,
+            { Type: ContextType.Event } => x.EventRoom != null && y.EventRoom != null && x.EventRoom == y.EventRoom && x.EventRoom.CanonicalEvent == y.EventRoom.CanonicalEvent,
+            { Type: ContextType.RestSite } => x.RestSiteRoom != null && y.RestSiteRoom != null && x.RestSiteRoom == y.RestSiteRoom && x.RestSiteRoom.Options == y.RestSiteRoom.Options,
+            { Type: ContextType.Shop } => x.MerchantRoom != null && y.MerchantRoom != null && x.MerchantRoom == y.MerchantRoom && x.MerchantRoom.Inventory.AllEntries == y.MerchantRoom.Inventory.AllEntries,
+            { Type: ContextType.BundleSelection } => x.BundleScreen != null && y.BundleScreen != null && x.BundleScreen == y.BundleScreen && x.Bundles != null && y.Bundles != null && x.Bundles.SequenceEqual(y.Bundles),
+            { Type: ContextType.GameOver } => true, // Game over context is determined by run state, which is already checked by reference equality in RunState
+            { Type: ContextType.CrstalBallEvent } => GodotObject.IsInstanceValid(x.CrystalSphereScreen) && GodotObject.IsInstanceValid(y.CrystalSphereScreen) && x.CrystalSphereScreen == y.CrystalSphereScreen,
+            { Type: ContextType.TimelinesEvent } => GodotObject.IsInstanceValid(x.TimelineScreen) && GodotObject.IsInstanceValid(y.TimelineScreen) && x.TimelineScreen == y.TimelineScreen,
+            _ => true // For contexts where we don't have specific equality checks, default to true
+        };
+    }
+
+    public int GetHashCode([DisallowNull] ContextInfo obj)
+    {
+        // Hash code should be consistent with Equals - contexts that are considered equal should have the same hash code
+        if (obj == null) return 0;
+
+        return obj.Type switch
+        {
+            ContextType.CharacterSelect => GodotObject.IsInstanceValid(obj.CharacterSelectScreen) ? obj.CharacterSelectScreen.GetHashCode() : 0,
+            ContextType.Map => obj.RunState != null ? obj.RunState.GetHashCode() : 0,
+            ContextType.HandSelection => GodotObject.IsInstanceValid(obj.Hand) ? obj.Hand.GetHashCode() : 0,
+            ContextType.CardSelection => GodotObject.IsInstanceValid(obj.OverlayNode) ? obj.OverlayNode.GetHashCode() : 0,
+            ContextType.Rewards => GodotObject.IsInstanceValid(obj.OverlayNode) ? obj.OverlayNode.GetHashCode() : 0,
+            ContextType.Combat => obj.CombatState != null ? obj.CombatState.GetHashCode() : 0,
+            ContextType.Event => obj.EventRoom != null ? HashCode.Combine(obj.EventRoom.GetHashCode(), obj.EventRoom.CanonicalEvent.GetHashCode()) : 0,
+            ContextType.RestSite => obj.RestSiteRoom != null ? HashCode.Combine(obj.RestSiteRoom.GetHashCode(), obj.RestSiteRoom.Options.GetHashCode()) : 0,
+            ContextType.Shop => obj.MerchantRoom != null ? HashCode.Combine(obj.MerchantRoom.GetHashCode(), obj.MerchantRoom.Inventory.AllEntries.GetHashCode()) : 0,
+            ContextType.BundleSelection => obj.BundleScreen != null && obj.Bundles != null ? HashCode.Combine(obj.BundleScreen.GetHashCode(), obj.Bundles.Aggregate(0, (acc, b) => acc ^ b.GetHashCode())) : 0,
+            ContextType.GameOver => obj.RunState != null ? obj.RunState.GetHashCode() : 0,
+            ContextType.CrstalBallEvent => GodotObject.IsInstanceValid(obj.CrystalSphereScreen) ? obj.CrystalSphereScreen.GetHashCode() : 0,
+            ContextType.TimelinesEvent => GodotObject.IsInstanceValid(obj.TimelineScreen) ? obj.TimelineScreen.GetHashCode() : 0,
+            _ => 0
+        };
+    }
 }
 
 public static class GameContext
