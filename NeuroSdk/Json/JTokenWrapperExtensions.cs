@@ -22,7 +22,7 @@ namespace NeuroSdk.Json
 
         public static IEnumerable<T?> GetArray<T>(this IJTokenWrapper data, string key)
         {
-            return data.Data?[key]?.GetValue<T[]?>() ?? Enumerable.Empty<T?>();
+            return data.Data?[key]?.AsArray().GetValues<T>() ?? Enumerable.Empty<T?>();
         }
     }
 }
