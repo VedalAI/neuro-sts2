@@ -113,8 +113,8 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
             var cardIndex = data.GetArray<int>("cards");
             if (cardIndex == null)
                 return ExecutionResult.Failure("Missing parameter: cards");
-            var cardname = cardIndex.FirstOrDefault();
-            if (cardIndex == null)
+            var cardname = cardIndex.FirstOrDefault(-1);
+            if (cardname < 0)
                 return ExecutionResult.Failure("Missing a card value in the array");
             var holders = GetVisibleHolders(hand);
             if (holders == null)
