@@ -252,7 +252,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         actionQueue.Clear();
         _reservedRewardButtonIds.Clear();
         await GodotMainThread.ClickAsync(result.Button);
-        await Task.Delay(1000); // Wait for the next room to load
+        await Task.Delay(500); // Wait for the next room to load
         Plugin.Log("Clicked proceed on rewards");
         GameStabilityDetector.ResetWasStable();
         return ExecutionResult.Success("Proceeded");
