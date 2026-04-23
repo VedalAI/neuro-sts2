@@ -1,42 +1,38 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Godot;
 using MegaCrit.Sts2.Core.AutoSlay.Helpers;
+using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
+using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens;
 using MegaCrit.Sts2.Core.Rewards;
-using STS2NeuroIntegration;
 using NeuroSdk.Actions;
-using NeuroSdk.Websocket;
-using Sts2Agent.Utilities;
 using NeuroSdk.Json;
-using System.Text;
-using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
-using MegaCrit.Sts2.Core.Context;
+using NeuroSdk.Websocket;
+using STS2NeuroIntegration;
+using Sts2Agent.Utilities;
 
 namespace Sts2Agent.Contexts;
 
-//TODO:Handle potions if potionslots are full. pehaps allow usage or discarding if slots are full
-//TODO: Convert to Index based approach
 public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContextSwitch
 {
     public class Result : IContextResult
     {
         public NButton Button;
+        public ulong RewardButtonId;
+        public bool RequiresPotionSlot;
+        public string RewardLabel = "reward";
     }
 
-    private sealed record RewardIdentity(string ActionName, string DisplayLabel);
-    private sealed record RewardEntry(string ActionName, string DisplayLabel, string TypeLabel, string Description, NRewardButton Button);
+    private sealed record RewardEntry(int Index, string DisplayLabel, string Description, NRewardButton Button);
 
     private readonly ActionQueue actionQueue = new();
-    private readonly Dictionary<Reward, RewardIdentity> _rewardIdentities = [];
-    private readonly Dictionary<string, int> _rewardTypeCounts = [];
-    private readonly Dictionary<string, int> _rewardTypeNextOrdinal = [];
-    private readonly HashSet<string> _reservedRewardActions = [];
-    private ulong _trackedRewardsScreenId;
+    private readonly HashSet<ulong> _reservedRewardButtonIds = [];
     private bool _isRevalidation;
 
     public ContextType Type => ContextType.Rewards;
@@ -60,14 +56,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         stringBuilder.AppendLine("**Available rewards:**");
         foreach (var rewardEntry in rewardEntries)
         {
-            stringBuilder.AppendLine($"- **{rewardEntry.DisplayLabel}**: {rewardEntry.Description}");
-        }
-
-        if (rewardEntries.Count <= 0)
-        {
-            var button = UiHelper.FindFirst<NProceedButton>(rewardsScreen);
-            if (button == null)
-                GameStabilityDetector.ResetWasStable(); // the Rewards screen on an event might not be populated yet.
+            stringBuilder.AppendLine($"- **[{rewardEntry.Index}] {rewardEntry.DisplayLabel}**: {rewardEntry.Description}");
         }
         return new ContextReturn(stringBuilder.ToString());
     }
@@ -78,15 +67,16 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         var rewardsScreen = ctx.RewardsScreen;
         if (rewardsScreen == null) return new CommandReturn();
 
-        SyncRewardActions(rewardsScreen);
-
         var rewardEntries = GetRewardEntries(rewardsScreen);
-        foreach (var rewardEntry in rewardEntries)
+        var forceText = new StringBuilder();
+        GetForceText(forceText, rewardEntries);
+
+        if (rewardEntries.Count > 0)
         {
-            commands.Add(new ConstructedAction(
-                rewardEntry.ActionName,
-                $"Claim {rewardEntry.DisplayLabel}: {rewardEntry.Description}"
-                ));
+            commands.Add(new("claim_reward", "Claim a reward. Use the index of the reward to claim it.", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+            {
+                ["reward_index"] = QJS.Type(JsonSchemaType.Integer)
+            })));
         }
 
         var proceedButton = UiHelper.FindFirst<NProceedButton>((Node)rewardsScreen);
@@ -96,33 +86,63 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
             else
                 commands.Add(new("proceed", "Proceed from the rewards room"));
 
-        return new CommandReturn(commands, true);
+        return new CommandReturn(commands, true, ForceText: forceText.ToString());
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
     {
+        if (!_isRevalidation)
+        {
+            NeuroIntegration.EndForce();
+        }
+
         var rewardsScreen = ctx.RewardsScreen;
         if (rewardsScreen == null)
             return ExecutionResult.Failure("No rewards screen");
 
-        if (IsRewardClaimAction(action.Name))
+        if (action.Name == "claim_reward")
         {
-            SyncRewardActions(rewardsScreen);
-
-            if (!_isRevalidation && _reservedRewardActions.Contains(action.Name))
+            if (_isRevalidation)
             {
-                return ExecutionResult.Failure("That reward is already queued");
+                if (result.Button == null)
+                {
+                    return ExecutionResult.Failure("That reward is no longer available. It was likely already claimed by a previous queued action.");
+                }
+
+                if (result.Button is NRewardButton rewardButton && rewardButton.Reward == null)
+                {
+                    return ExecutionResult.Failure("That reward is no longer available. It was likely already claimed by a previous queued action.");
+                }
+
+                if (result.RequiresPotionSlot)
+                {
+                    var player = LocalContext.GetMe(ctx.RunState!.Players);
+                    if (player != null && player.PotionSlots.All(x => x != null))
+                    {
+                        return ExecutionResult.Failure("Potion slots are full, can't pick up more potions");
+                    }
+                }
+
+                return ExecutionResult.Success();
             }
 
-            RewardEntry? rewardEntry = FindRewardEntry(rewardsScreen, action.Name);
-            if (rewardEntry == null)
+            var rewardIndex = data.GetValue("reward_index", -1);
+            if (rewardIndex < 0)
+                return ExecutionResult.Failure("Missing Parameter: reward_index");
+
+            var rewardEntries = GetRewardEntries(rewardsScreen);
+            if (rewardIndex >= rewardEntries.Count)
             {
-                NeuroIntegration.UnregisterAction(action.Name);
-                return ExecutionResult.Failure("That reward is no longer available. Either it was already claimed, or the rewards screen changed.");
+                return ExecutionResult.Failure($"Reward index out of range (available range: 0-{rewardEntries.Count - 1})");
             }
 
+            var rewardEntry = rewardEntries[rewardIndex];
             result.Button = rewardEntry.Button;
-            if (rewardEntry.Button.Reward is PotionReward)
+            result.RewardButtonId = rewardEntry.Button.GetInstanceId();
+            result.RequiresPotionSlot = rewardEntry.Button.Reward is PotionReward;
+            result.RewardLabel = rewardEntry.DisplayLabel;
+
+            if (result.RequiresPotionSlot)
             {
                 var player = LocalContext.GetMe(ctx.RunState!.Players);
                 if (player != null && player.PotionSlots.All(x => x != null))
@@ -131,11 +151,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
                 }
             }
 
-            if (!_isRevalidation)
-            {
-                _reservedRewardActions.Add(action.Name);
-                NeuroIntegration.UnregisterAction(action.Name);
-            }
+            _reservedRewardButtonIds.Add(result.RewardButtonId);
             return ExecutionResult.Success();
         }
         else
@@ -153,6 +169,10 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         if (!queueResult.Successful)
         {
             Plugin.LogDebug($"ActionQueue: action '{action.Name}' was rejected or cancelled: {queueResult.Message}");
+            ReleaseReservedReward(result);
+            actionQueue.AddToDiscardedActionText($"- couldn't {GetActionDescription(action, result)} due to {queueResult.Message}");
+            if (actionQueue.Count == 0)
+                actionQueue.SendDiscardedActionText();
             return queueResult;
         }
 
@@ -160,19 +180,22 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         if (freshCtx == null || freshCtx.Type != ContextType.Rewards)
         {
             Plugin.LogDebug($"ActionQueue: context changed while waiting for '{action.Name}'");
+            ReleaseReservedReward(result);
             actionQueue.ActionFinished();
             return ExecutionResult.Failure("Context changed, no longer on rewards");
         }
 
-        var freshResult = new Result();
         _isRevalidation = true;
-        var revalidation = Validate(action, action.Data, freshResult, freshCtx);
+        var revalidation = Validate(action, action.Data, result, freshCtx);
         _isRevalidation = false;
         if (!revalidation.Successful)
         {
             Plugin.LogDebug($"ActionQueue: action '{action.Name}' failed revalidation: {revalidation.Message}");
-            _reservedRewardActions.Remove(action.Name);
+            ReleaseReservedReward(result);
             actionQueue.ActionFinished();
+            actionQueue.AddToDiscardedActionText($"- {GetActionDescription(action, result)} was cancelled due to {revalidation.Message}");
+            if (actionQueue.Count == 0)
+                actionQueue.SendDiscardedActionText();
             return revalidation;
         }
 
@@ -182,36 +205,47 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         {
             return action.Name switch
             {
-                "proceed" or "skip_rewards" => await Proceed(freshResult),
-                _ when IsRewardClaimAction(action.Name) => await SelectReward(action, freshResult, freshCtx),
+                "proceed" or "skip_rewards" => await Proceed(result),
+                "claim_reward" => await SelectReward(result),
                 _ => null
             };
         }
         finally
         {
             actionQueue.ActionFinished();
+            if (action.Name is not ("proceed" or "skip_rewards") && actionQueue.Count <= 0)
+            {
+                var currentCtx = GameContext.Resolve();
+                if (currentCtx?.Type == ContextType.Rewards && currentCtx.RewardsScreen != null)
+                {
+                    var forceText = new StringBuilder();
+                    GetForceText(forceText, GetRewardEntries(currentCtx.RewardsScreen));
+                    NeuroIntegration.Reforce(forceText.ToString());
+                }
+            }
         }
     }
 
-    private async Task<ExecutionResult> SelectReward(ConstructedAction action, Result root, ContextInfo ctx)
+    private async Task<ExecutionResult> SelectReward(Result result)
     {
-        await GodotMainThread.ClickAsync(root.Button);
-        if (ctx.RewardsScreen != null)
+        try
         {
-            SyncRewardActions(ctx.RewardsScreen);
+            await GodotMainThread.ClickAsync(result.Button);
+            Plugin.Log($"Selected reward {result.RewardLabel}");
+            return ExecutionResult.Success("Reward selected");
         }
-        _reservedRewardActions.Remove(action.Name);
-        // GameStabilityDetector.ResetWasStable();
-        Plugin.Log($"Selected reward with action {action.Name}");
-        return ExecutionResult.Success("Reward selected");
+        catch
+        {
+            ReleaseReservedReward(result);
+            throw;
+        }
     }
 
     private async Task<ExecutionResult> Proceed(Result result)
     {
         // Try proceed button on rewards overlay first
         actionQueue.Clear();
-        ClearRewardActions();
-        _reservedRewardActions.Clear();
+        _reservedRewardButtonIds.Clear();
         await GodotMainThread.ClickAsync(result.Button);
         Plugin.Log("Clicked proceed on rewards");
         // GameStabilityDetector.ResetWasStable();
@@ -225,88 +259,54 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
             .ToList();
     }
 
-    private static bool IsRewardClaimAction(string actionName)
+    private void GetForceText(StringBuilder forceText, IReadOnlyList<RewardEntry> rewardEntries)
     {
-        return actionName.StartsWith("claim_");
+        if (rewardEntries.Count > 0)
+        {
+            forceText.AppendLine("Claim rewards or skip the remaining ones.");
+            forceText.AppendLine("Available rewards:");
+            foreach (var rewardEntry in rewardEntries)
+            {
+                forceText.AppendLine($"- [{rewardEntry.Index}] {rewardEntry.DisplayLabel}: {rewardEntry.Description}");
+            }
+            return;
+        }
+
+        forceText.AppendLine("All rewards have been claimed. Proceed from the rewards room.");
     }
 
-    private RewardEntry? FindRewardEntry(NRewardsScreen screen, string actionName)
+    private static string GetActionDescription(ConstructedAction action, Result result)
     {
-        return GetRewardEntries(screen).FirstOrDefault(entry => entry.ActionName == actionName);
+        return action.Name switch
+        {
+            "claim_reward" => $"claim {result.RewardLabel}",
+            "skip_rewards" => "skip the remaining rewards",
+            "proceed" => "proceed from rewards",
+            _ => action.Name
+        };
     }
 
     private List<RewardEntry> GetRewardEntries(NRewardsScreen screen)
     {
-        EnsureRewardIdentityCache(screen);
-
         var rewardEntries = new List<RewardEntry>();
         foreach (var button in GetEnabledRewardButtons(screen))
         {
-            var reward = button.Reward!;
-            string typeLabel = GetRewardTypeLabel(reward);
-            string description = TextHelper.SafeLocString(() => reward.Description).AsSingleLine();
-
-            if (!_rewardIdentities.TryGetValue(reward, out var rewardIdentity))
+            if (_reservedRewardButtonIds.Contains(button.GetInstanceId()))
             {
-                rewardIdentity = AddRewardIdentity(reward, typeLabel);
+                continue;
             }
 
+            var reward = button.Reward!;
+            string description = TextHelper.SafeLocString(() => reward.Description).AsSingleLine();
+
             rewardEntries.Add(new RewardEntry(
-                rewardIdentity.ActionName,
-                rewardIdentity.DisplayLabel,
-                typeLabel,
+                rewardEntries.Count,
+                $"{GetRewardTypeLabel(reward)} reward",
                 description,
                 button));
         }
 
-        return rewardEntries
-            .Where(entry => _isRevalidation || !_reservedRewardActions.Contains(entry.ActionName))
-            .ToList();
-    }
-
-    private void EnsureRewardIdentityCache(NRewardsScreen screen)
-    {
-        ulong screenId = screen.GetInstanceId();
-        if (_trackedRewardsScreenId == screenId)
-        {
-            return;
-        }
-
-        _trackedRewardsScreenId = screenId;
-        _rewardIdentities.Clear();
-        _rewardTypeCounts.Clear();
-        _rewardTypeNextOrdinal.Clear();
-
-        var buttons = GetEnabledRewardButtons(screen);
-        foreach (var group in buttons.GroupBy(button => GetRewardTypeLabel(button.Reward!)))
-        {
-            _rewardTypeCounts[group.Key] = group.Count();
-            _rewardTypeNextOrdinal[group.Key] = 0;
-        }
-
-        foreach (var button in buttons)
-        {
-            var reward = button.Reward!;
-            AddRewardIdentity(reward, GetRewardTypeLabel(reward));
-        }
-    }
-
-    private RewardIdentity AddRewardIdentity(Reward reward, string typeLabel)
-    {
-        bool hasDuplicates = _rewardTypeCounts.GetValueOrDefault(typeLabel) > 1;
-        string actionBaseName = $"claim_{TextHelper.GetActionNameFor(typeLabel)}_reward";
-        string displayLabel = $"{typeLabel} reward";
-        if (hasDuplicates)
-        {
-            int ordinal = _rewardTypeNextOrdinal[typeLabel] + 1;
-            _rewardTypeNextOrdinal[typeLabel] = ordinal;
-            actionBaseName += $"_{ordinal}";
-            displayLabel += $" #{ordinal}";
-        }
-
-        var rewardIdentity = new RewardIdentity(actionBaseName, displayLabel);
-        _rewardIdentities[reward] = rewardIdentity;
-        return rewardIdentity;
+        return rewardEntries;
     }
 
     private static string GetRewardTypeLabel(Reward reward)
@@ -322,43 +322,15 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         };
     }
 
-    private void SyncRewardActions(NRewardsScreen screen)
+    private void ReleaseReservedReward(Result result)
     {
-        var instance = NeuroIntegration.Instance;
-        if (instance == null)
+        if (result.RewardButtonId == 0)
         {
             return;
         }
 
-        var activeRewardActionNames = GetRewardEntries(screen)
-            .Select(entry => entry.ActionName)
-            .ToHashSet();
-        var staleActionNames = instance.GlobalActions
-            .Where(action => IsRewardClaimAction(action.Name) && !activeRewardActionNames.Contains(action.Name))
-            .Select(action => action.Name)
-            .ToArray();
-        if (staleActionNames.Length > 0)
-        {
-            NeuroIntegration.UnregisterActions(staleActionNames);
-        }
-    }
-
-    private static void ClearRewardActions()
-    {
-        var instance = NeuroIntegration.Instance;
-        if (instance == null)
-        {
-            return;
-        }
-
-        var rewardActionNames = instance.GlobalActions
-            .Where(action => IsRewardClaimAction(action.Name))
-            .Select(action => action.Name)
-            .ToArray();
-        if (rewardActionNames.Length > 0)
-        {
-            NeuroIntegration.UnregisterActions(rewardActionNames);
-        }
+        _reservedRewardButtonIds.Remove(result.RewardButtonId);
+        result.RewardButtonId = 0;
     }
 
     public void OnContextSwitch(ContextType newContext)
@@ -366,11 +338,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
 
         actionQueue.Clear();
         NeuroIntegration.UnregisterAllActions();
-        _trackedRewardsScreenId = 0;
-        _rewardIdentities.Clear();
-        _rewardTypeCounts.Clear();
-        _rewardTypeNextOrdinal.Clear();
-        _reservedRewardActions.Clear();
+        _reservedRewardButtonIds.Clear();
         _isRevalidation = false;
     }
 }
