@@ -93,6 +93,7 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     }
 
 
+    //TODO: make this a Persistant CommandReturn. Since this a multi step event
     return new CommandReturn(commands);
   }
 

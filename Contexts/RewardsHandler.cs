@@ -20,6 +20,7 @@ using MegaCrit.Sts2.Core.Context;
 namespace Sts2Agent.Contexts;
 
 //TODO:Handle potions if potionslots are full. pehaps allow usage or discarding if slots are full
+//TODO: Convert to Index based approach
 public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContextSwitch
 {
     public class Result : IContextResult
@@ -84,18 +85,18 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         {
             commands.Add(new ConstructedAction(
                 rewardEntry.ActionName,
-                $"Claim {rewardEntry.DisplayLabel}: {rewardEntry.Description}",
-                persistant_action: true));
+                $"Claim {rewardEntry.DisplayLabel}: {rewardEntry.Description}"
+                ));
         }
 
         var proceedButton = UiHelper.FindFirst<NProceedButton>((Node)rewardsScreen);
         if (proceedButton?.IsEnabled == true)
             if (rewardEntries.Count > 0)
-                commands.Add(new("skip_rewards", "Skip any unclaimed rewards. Be sure to collect the ones you want first.", persistant_action: true));
+                commands.Add(new("skip_rewards", "Skip any unclaimed rewards. Be sure to collect the ones you want first."));
             else
-                commands.Add(new("proceed", "Proceed from the rewards room", persistant_action: true));
+                commands.Add(new("proceed", "Proceed from the rewards room"));
 
-        return new CommandReturn(commands, ForceWindow: false);
+        return new CommandReturn(commands, true);
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
