@@ -219,35 +219,25 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         }
         else
         {
-            for (int i = 0; i < pcs.Hand.Cards.Count; i++)
-            {
-                var card = pcs.Hand.Cards[i];
-                if (card.CanPlay())
-                    prompt.AppendLine($"- `{i}`: {TextHelper.StripBBCode(card.Title)}");
-            }
+            prompt.AppendLine(GetAvailableCardsActionText(player));
         }
 
-        var enemyTargetCardsAvailable = GetAvailableCardsForAction("play_card_on_enemy", player, pcs, ctx).Any();
-        var genericCardsAvailable = GetAvailableCardsForAction("play_card", player, pcs, ctx).Any();
-        var enemyTargetPotionsAvailable = GetAvailablePotionsForAction("use_potion_on_enemy", player, ctx).Any();
-        var genericPotionsAvailable = GetAvailablePotionsForAction("use_potion", player, ctx).Any();
-        var allyTargetCardsAvailable = GetAvailableCardsForAction("play_card_on_ally", player, pcs, ctx).Any();
 
         var hittableEnemies = ctx.CombatState?.HittableEnemies.ToList();
-        if ((enemyTargetCardsAvailable || enemyTargetPotionsAvailable) && hittableEnemies != null && hittableEnemies.Count > 1)
+        if (hittableEnemies != null && hittableEnemies.Count > 1)
         {
             prompt.AppendLine();
             prompt.AppendLine("## Enemy targets");
             for (int i = 0; i < hittableEnemies.Count; i++)
             {
-                prompt.AppendLine($"- `{i}`: {hittableEnemies[i].GetUniqueName(false, i)}");
+                prompt.AppendLine($"- {hittableEnemies[i].GetUniqueName(false, i)}");
             }
         }
 
         var allyTargets = ctx.CombatState?.Allies
             .Where(ally => ally.IsAlive && ally.IsPlayer && ally != player.Creature)
             .ToList();
-        if (allyTargetCardsAvailable && allyTargets != null && allyTargets.Count > 0)
+        if (allyTargets != null && allyTargets.Count > 0)
         {
             prompt.AppendLine();
             prompt.AppendLine("## Ally targets");
@@ -258,43 +248,27 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         }
 
         //If there is only 1 Target no need to make it more difficult for llms
-        if (enemyTargetCardsAvailable && !_invalidatedActions.Contains("play_card_on_enemy"))
+        if (!_invalidatedActions.Contains("play_card"))
         {
-            commands.Add(new("play_card_on_enemy", "Play a card on the target enemy", QJS.WrapObject(new Dictionary<string, JsonSchema>()
+            var schema = QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
                 ["card_index"] = QJS.Type(JsonSchemaType.Integer),
-                ["target_index"] = QJS.Type(JsonSchemaType.Integer)
-            })));
-        }
-        if (genericCardsAvailable && !_invalidatedActions.Contains("play_card"))
-        {
-            commands.Add(new("play_card", "Play a card", QJS.WrapObject(new Dictionary<string, JsonSchema>()
-            {
-                ["card_index"] = QJS.Type(JsonSchemaType.Integer)
-            })));
-        }
-        if (enemyTargetPotionsAvailable && !_invalidatedActions.Contains("use_potion_on_enemy"))
-            commands.Add(new("use_potion_on_enemy", "Use a potion on a target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
-            {
-                ["potion_index"] = QJS.Type(JsonSchemaType.Integer),
-                ["target_index"] = QJS.Type(JsonSchemaType.Integer)
-            })));
-
-        if (genericPotionsAvailable && !_invalidatedActions.Contains("use_potion"))
-            commands.Add(new("use_potion", "Use a potion", QJS.WrapObject(new Dictionary<string, JsonSchema>()
-            {
-                ["potion_index"] = QJS.Type(JsonSchemaType.Integer),
-            })));
-
-        //TODO: this might require changes for multiplayer as. there are TargetType.AnyPlayer too
-        if (allyTargetCardsAvailable && !_invalidatedActions.Contains("play_card_on_ally"))
-        {
-
-            commands.Add(new("play_card_on_ally", "Select a card that requires an allied target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
-            {
-                ["card_index"] = QJS.Type(JsonSchemaType.Integer),
+                ["target_index"] = QJS.Type(JsonSchemaType.Integer),
                 ["ally_index"] = QJS.Type(JsonSchemaType.Integer)
-            })));
+            }, false);
+            schema.Required = ["card_index"];
+            commands.Add(new("play_card", "Play a card", schema));
+        }
+        if (!_invalidatedActions.Contains("use_potion"))
+        {
+            var schema = QJS.WrapObject(new Dictionary<string, JsonSchema>()
+            {
+                ["potion_index"] = QJS.Type(JsonSchemaType.Integer),
+                ["target_index"] = QJS.Type(JsonSchemaType.Integer),
+                ["ally_index"] = QJS.Type(JsonSchemaType.Integer)
+            }, false);
+            schema.Required = ["potion_index"];
+            commands.Add(new("use_potion", "Use a potion", schema));
         }
         if (!_invalidatedActions.Contains("end_turn"))
             commands.Add(new("end_turn", "Ends your current turn"));
@@ -305,6 +279,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
+        if (!_isRevalidation)
+        {
+            NeuroIntegration.EndForce();
+        }
+
         var cm = CombatManager.Instance;
         if (cm == null) return ExecutionResult.Failure("Not in combat");
         if (cm.IsOverOrEnding) return ExecutionResult.Failure("Combat is ending");
@@ -330,7 +309,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             if (cm.IsPlayerReadyToEndTurn(player))
                 return ExecutionResult.Failure("Turn already ended");
             if (!_isRevalidation)
-                InvalidateAllCombatActions();
+                NeuroIntegration.UnregisterAllActions();
             return ExecutionResult.Success();
         }
         return ExecutionResult.Unstable("Unknown action");
@@ -401,31 +380,16 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         if (parsedData.Potion != null)
             _projectedPotionsUsed.Add(parsedData.Potion);
 
-        var candidateActionNames = GetCurrentActionNames(player, pcs, ctx);
         var toUnregister = new HashSet<string>();
-        foreach (var actionName in candidateActionNames)
-        {
-            if (actionName.StartsWith("play_card"))
-            {
-                var candidates = GetAvailableCardsForAction(actionName, player, pcs, ctx);
-                if (parsedData.Card != null)
-                    candidates = candidates.Where(card => card != parsedData.Card);
+        var candidates = pcs.Hand.Cards.Where(card => card.CanPlay());
+        if (parsedData.Card != null)
+            candidates = candidates.Where(card => card != parsedData.Card);
 
-                if (!candidates.Any(card => CanAffordProjectedCost(card, canPayEnergyWithStars)))
-                    toUnregister.Add(actionName);
-            }
-            else if (actionName.StartsWith("use_potion"))
-            {
-                if (!GetAvailablePotionsForAction(actionName, player, ctx).Any(potion => !_projectedPotionsUsed.Contains(potion)))
-                    toUnregister.Add(actionName);
-            }
-        }
+        if (!candidates.Any(card => CanAffordProjectedCost(card, canPayEnergyWithStars)))
+            toUnregister.Add("play_card");
 
-        var actionsRemaining = candidateActionNames.Except(toUnregister);
-        if (candidateActionNames.Contains("end_turn") && actionsRemaining.All(x => x == "end_turn"))
-        {
-            toUnregister.Add("end_turn");
-        }
+        if (!player.Potions.Any(potion => !_projectedPotionsUsed.Contains(potion)))
+            toUnregister.Add("use_potion");
 
         foreach (var name in toUnregister)
             _invalidatedActions.Add(name);
@@ -449,8 +413,6 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         var potion = potions.ElementAtOrDefault(slot);
         if (potion == null)
             return ExecutionResult.Failure($"No potion at index '{slot}'");
-        if (!GetAvailablePotionsForAction(action.Name, player, ctx).Contains(potion))
-            return ExecutionResult.Failure($"Potion at index '{slot}' is not valid for action '{action.Name}'");
 
         Plugin.LogDebug("Setting potion");
         parsedData.Potion = potion;
@@ -504,10 +466,8 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         var card = hand[cardIndex];
         if (card == null || !card.CanPlay())
         {
-            return ExecutionResult.Failure($"Card at index '{cardIndex}' cannot be played");
+            return ExecutionResult.Failure($"Card at index '{cardIndex}' cannot be played. Please choose a different card from: {GetAvailableCardsActionText(player)}");
         }
-        if (!GetAvailableCardsForAction(action.Name, player!, pcs, ctx).Contains(card))
-            return ExecutionResult.Failure($"Card at index '{cardIndex}' is not valid for action '{action.Name}' because cards targettype is {card.TargetType}");
 
         var combatState = card?.CombatState;
         if (combatState == null)
@@ -559,6 +519,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         if (!queueResult.Successful)
         {
             Plugin.LogDebug($"ActionQueue: action '{action.Name}' was rejected or cancelled: {queueResult.Message}");
+            //TODO: figure out how to not send end_turn when it was the last action but was automatically already queued
             actionQueue.AddToDiscardedActionText($"- {action.Name} was cancelled due to {queueResult.Message}");
             if (actionQueue.Count == 0)
                 actionQueue.SendDiscardedActionText();
@@ -626,6 +587,13 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
                     var context = getContext(freshCtx, afterPlayed: true);
                     NeuroIntegration.SendContext(context.Message, context.Silent);
                 }
+
+                if (actionQueue.Count <= 0 && freshContext?.Type == ContextType.Combat)
+                {
+                    var commandReturn = GetCommands(freshContext);
+                    if (!commandReturn.Commands.All(x => x.Name == "end_turn"))
+                        NeuroIntegration.Reforce(commandReturn.ForceText);
+                }
             }
         }
     }
@@ -648,7 +616,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             Plugin.LogDebug(e.Message);
             return ExecutionResult.Failure("Playing the card threw an exception");
         }
-        await Task.Delay(1000); // Small delay to make it a better viewing experience
+        await Task.Delay(2000); // Small delay to make it a better viewing experience
         Plugin.Log($"Played card");
         return ExecutionResult.Success("Card played");
     }
@@ -680,73 +648,6 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         return ExecutionResult.Success("Potion used");
     }
 
-    private void InvalidateAllCombatActions()
-    {
-        var actionNames = new[]
-        {
-            "play_card",
-            "play_card_on_enemy",
-            "play_card_on_ally",
-            "use_potion",
-            "use_potion_on_enemy",
-            "end_turn"
-        };
-
-        foreach (var actionName in actionNames)
-            _invalidatedActions.Add(actionName);
-
-        NeuroIntegration.UnregisterActions(actionNames);
-    }
-
-    private HashSet<string> GetCurrentActionNames(Player player, PlayerCombatState pcs, ContextInfo ctx)
-    {
-        var actionNames = new HashSet<string>();
-
-        if (GetAvailableCardsForAction("play_card_on_enemy", player, pcs, ctx).Any())
-            actionNames.Add("play_card_on_enemy");
-        if (GetAvailableCardsForAction("play_card", player, pcs, ctx).Any())
-            actionNames.Add("play_card");
-        if (GetAvailableCardsForAction("play_card_on_ally", player, pcs, ctx).Any())
-            actionNames.Add("play_card_on_ally");
-        if (GetAvailablePotionsForAction("use_potion_on_enemy", player, ctx).Any())
-            actionNames.Add("use_potion_on_enemy");
-        if (GetAvailablePotionsForAction("use_potion", player, ctx).Any())
-            actionNames.Add("use_potion");
-
-        actionNames.Add("end_turn");
-        return actionNames;
-    }
-
-    private IEnumerable<CardModel> GetAvailableCardsForAction(string actionName, Player player, PlayerCombatState pcs, ContextInfo ctx)
-    {
-        var handCards = pcs.Hand.Cards.Where(card => card.CanPlay());
-        bool hasMultipleEnemyTargets = ctx.CombatState?.HittableEnemies.Count > 1;
-        bool hasAllies = ctx.CombatState?.Allies.Any(ally => ally.IsAlive && ally != player.Creature) == true;
-
-        return actionName switch
-        {
-            "play_card_on_enemy" when hasMultipleEnemyTargets => handCards.Where(card => card.TargetType is not (TargetType.AnyAlly or TargetType.AllAllies)),
-            "play_card_on_ally" when hasAllies => handCards.Where(card => card.TargetType is not (TargetType.AnyEnemy or TargetType.AllEnemies)),
-            "play_card" when hasMultipleEnemyTargets => handCards.Where(card => card.TargetType is not (TargetType.AnyEnemy or TargetType.AnyAlly)),
-            "play_card" => handCards,
-            _ => Enumerable.Empty<CardModel>()
-        };
-    }
-
-    private IEnumerable<PotionModel> GetAvailablePotionsForAction(string actionName, Player player, ContextInfo ctx)
-    {
-        bool hasMultipleEnemyTargets = ctx.CombatState?.HittableEnemies.Count > 1;
-        var potions = player.Potions.AsEnumerable();
-
-        return actionName switch
-        {
-            "use_potion_on_enemy" when hasMultipleEnemyTargets => potions.Where(IsEnemyTargetPotion),
-            "use_potion" when hasMultipleEnemyTargets => potions.Where(potion => !IsEnemyTargetPotion(potion)),
-            "use_potion" => potions,
-            _ => Enumerable.Empty<PotionModel>()
-        };
-    }
-
     private bool CanAffordProjectedCost(CardModel card, bool canPayEnergyWithStars)
     {
         int energyCost = Math.Max(0, card.EnergyCost.GetWithModifiers(CostModifiers.All));
@@ -761,8 +662,20 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         return energyCost <= _projectedEnergyRemaining && starCost <= _projectedStarsRemaining;
     }
 
-    private static bool IsEnemyTargetPotion(PotionModel potion)
-        => potion.TargetType is TargetType.AnyEnemy or TargetType.TargetedNoCreature;
+    private string GetAvailableCardsActionText(Player player)
+    {
+        var pcs = player.PlayerCombatState;
+        if (pcs == null) return "No player combat state";
+        if (pcs.Hand.Cards.Count == 0) return "Your hand is empty";
+        var text = new StringBuilder();
+        text.AppendLine("You can play the following cards:");
+        for (int i = 0; i < pcs.Hand.Cards.Count; i++)
+        {
+            if (pcs.Hand.Cards[i].CanPlay())
+                text.AppendLine($"- `{i}`: {TextHelper.StripBBCode(pcs.Hand.Cards[i].Title)}");
+        }
+        return text.ToString();
+    }
 
     private static void PrettyRenderEnemies(StringBuilder stringBuilder, IReadOnlyList<Creature> enemies, CombatState combatState)
     {
