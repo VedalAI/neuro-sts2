@@ -122,6 +122,11 @@ public class NeuroIntegration : Node
       Plugin.LogWarning("Already Forcing, skipping Reforce call");
       return;
     }
+    if (Instance!.GlobalActions.Count <= 1)
+    {
+      Plugin.LogWarning($"Not enough Global Actions to Reforce, skipping Reforce call, Forcing text to find the culprit: {force_text}");
+      return;
+    }
     is_forcing = true;
     var force = new ActionsForce(force_text, null, true, ActionsForce.Priority.Low, Instance!.GlobalActions);
     WebsocketConnection.Instance!.Send(force);
@@ -253,16 +258,14 @@ public class NeuroIntegration : Node
       {
         lastWindow!.SetForce(0, CommandsList.ForceText, null);
         lastWindow!.Register();
-        is_forcing = true;
       }
       else
       {
-        var newactionlist = new List<ConstructedAction>(GlobalActions);
-        newactionlist.AddRange(CommandsList.Commands);
-        newactionlist = [.. newactionlist.DistinctBy(action => action.Name)];
-        if (newactionlist.Count <= 0)
+        Plugin.LogDebug($"Is currently forcing: {is_forcing}, Global Actions Count: {GlobalActions.Count}");
+        if (GlobalActions.Count > 0 && !is_forcing)
         {
-          var force = new ActionsForce(CommandsList.ForceText, null, true, ActionsForce.Priority.Low, newactionlist);
+          Plugin.LogDebug("Forcing new Global Actions with commands: " + string.Join(", ", CommandsList.Commands.Select(c => c.Name)));
+          var force = new ActionsForce(CommandsList.ForceText, null, true, ActionsForce.Priority.Low, GlobalActions);
           if (!string.IsNullOrEmpty(contextReturn.Message))
             SendContext(contextReturn.Message, contextReturn.Silent);
           WebsocketConnection.Instance!.Send(force);
