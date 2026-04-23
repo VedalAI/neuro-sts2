@@ -248,7 +248,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         }
 
         //If there is only 1 Target no need to make it more difficult for llms
-        if (!_invalidatedActions.Contains("play_card"))
+        if (!_invalidatedActions.Contains("play_card") && pcs.Hand.Cards.Any(card => card.CanPlay()))
         {
             var schema = QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
@@ -259,7 +259,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             schema.Required = ["card_index"];
             commands.Add(new("play_card", "Play a card, optionally supply enemy_index or ally_index to specify a target otherwise the first target will be chosen", schema));
         }
-        if (!_invalidatedActions.Contains("use_potion"))
+        if (!_invalidatedActions.Contains("use_potion") && player.Potions.Any(potion => potion != null))
         {
             var schema = QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
@@ -574,7 +574,6 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         }
         finally
         {
-            actionQueue.ActionFinished();
             if (action.Name != "end_turn") // Don't send a new context after ending the turn, we'll get a new one when the next combat round starts
             {
                 var freshContext = GameContext.Resolve();
@@ -588,13 +587,14 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
                     NeuroIntegration.SendContext(context.Message, context.Silent);
                 }
 
-                if (actionQueue.Count <= 0 && freshContext?.Type == ContextType.Combat)
+                if (actionQueue.Count <= 1 && freshContext?.Type == ContextType.Combat)
                 {
                     var commandReturn = GetCommands(freshContext);
                     if (!commandReturn.Commands.All(x => x.Name == "end_turn"))
                         NeuroIntegration.Reforce(commandReturn.ForceText);
                 }
             }
+            actionQueue.ActionFinished();
         }
     }
 
@@ -616,7 +616,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             Plugin.LogDebug(e.Message);
             return ExecutionResult.Failure("Playing the card threw an exception");
         }
-        await Task.Delay(2000); // Small delay to make it a better viewing experience
+        await Task.Delay(500); // Small delay to make it a better viewing experience
         Plugin.Log($"Played card");
         return ExecutionResult.Success("Card played");
     }

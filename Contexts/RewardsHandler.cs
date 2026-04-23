@@ -78,15 +78,19 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
                 ["reward_index"] = QJS.Type(JsonSchemaType.Integer)
             })));
         }
+        bool persistant = true;
 
         var proceedButton = UiHelper.FindFirst<NProceedButton>((Node)rewardsScreen);
         if (proceedButton?.IsEnabled == true)
             if (rewardEntries.Count > 0)
                 commands.Add(new("skip_rewards", "Skip any unclaimed rewards. Be sure to collect the ones you want first."));
             else
+            {
                 commands.Add(new("proceed", "Proceed from the rewards room"));
+                persistant = false;
+            }
 
-        return new CommandReturn(commands, true, ForceText: forceText.ToString());
+        return new CommandReturn(commands, persistant, ForceText: forceText.ToString());
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
@@ -133,7 +137,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
             var rewardEntries = GetRewardEntries(rewardsScreen);
             if (rewardIndex >= rewardEntries.Count)
             {
-                return ExecutionResult.Failure($"Reward index out of range (available range: 0-{rewardEntries.Count - 1})");
+                return ExecutionResult.Failure($"Reward index {rewardIndex} out of range (remaining rewards: {rewardEntries.Count})");
             }
 
             var rewardEntry = rewardEntries[rewardIndex];
@@ -212,8 +216,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         }
         finally
         {
-            actionQueue.ActionFinished();
-            if (action.Name is not ("proceed" or "skip_rewards") && actionQueue.Count <= 0)
+            if (action.Name is not ("proceed" or "skip_rewards") && actionQueue.Count <= 1)
             {
                 var currentCtx = GameContext.Resolve();
                 if (currentCtx?.Type == ContextType.Rewards && currentCtx.RewardsScreen != null)
@@ -223,6 +226,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
                     NeuroIntegration.Reforce(forceText.ToString());
                 }
             }
+            actionQueue.ActionFinished();
         }
     }
 
@@ -231,13 +235,14 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         try
         {
             await GodotMainThread.ClickAsync(result.Button);
+            await Task.Delay(500); // Wait for the reward to be claimed and the button to be disabled/removed
             Plugin.Log($"Selected reward {result.RewardLabel}");
             return ExecutionResult.Success("Reward selected");
         }
         catch
         {
             ReleaseReservedReward(result);
-            throw;
+            return ExecutionResult.Failure("Failed to select reward");
         }
     }
 
@@ -247,8 +252,9 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         actionQueue.Clear();
         _reservedRewardButtonIds.Clear();
         await GodotMainThread.ClickAsync(result.Button);
+        await Task.Delay(1000); // Wait for the next room to load
         Plugin.Log("Clicked proceed on rewards");
-        // GameStabilityDetector.ResetWasStable();
+        GameStabilityDetector.ResetWasStable();
         return ExecutionResult.Success("Proceeded");
     }
 

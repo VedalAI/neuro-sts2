@@ -208,14 +208,13 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         }
         finally
         {
-            actionQueue.ActionFinished();
-            if (action.Name != "shop_leave" && action.Name != "shop_open" && actionQueue.Count <= 0)
+            if (action.Name != "shop_leave" && action.Name != "shop_open" && actionQueue.Count <= 1)
             {
                 var stringBuilder = new StringBuilder();
                 getForceText(stringBuilder);
                 NeuroIntegration.Reforce(stringBuilder.ToString());
-
             }
+            actionQueue.ActionFinished();
         }
     }
 
