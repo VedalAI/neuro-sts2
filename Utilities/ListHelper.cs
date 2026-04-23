@@ -11,7 +11,7 @@ public static class CreatureHelper
 
     public static string GetUniqueName(this Creature creature, bool list_unique, int index)
     {
-        return list_unique ? creature.Name : $"[{index}] " + creature.Name;
+        return list_unique ? creature.Name : $"'{index}': " + creature.Name;
 
     }
     public static bool CreaturesAreDistinct(this IReadOnlyList<Creature> list)
