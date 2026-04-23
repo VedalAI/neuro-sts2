@@ -264,27 +264,27 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             {
                 ["card_index"] = QJS.Type(JsonSchemaType.Integer),
                 ["target_index"] = QJS.Type(JsonSchemaType.Integer)
-            }), persistant_action: true));
+            })));
         }
         if (genericCardsAvailable && !_invalidatedActions.Contains("play_card"))
         {
             commands.Add(new("play_card", "Play a card", QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
                 ["card_index"] = QJS.Type(JsonSchemaType.Integer)
-            }), persistant_action: true));
+            })));
         }
         if (enemyTargetPotionsAvailable && !_invalidatedActions.Contains("use_potion_on_enemy"))
             commands.Add(new("use_potion_on_enemy", "Use a potion on a target", QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
                 ["potion_index"] = QJS.Type(JsonSchemaType.Integer),
                 ["target_index"] = QJS.Type(JsonSchemaType.Integer)
-            }), persistant_action: true));
+            })));
 
         if (genericPotionsAvailable && !_invalidatedActions.Contains("use_potion"))
             commands.Add(new("use_potion", "Use a potion", QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
                 ["potion_index"] = QJS.Type(JsonSchemaType.Integer),
-            }), persistant_action: true));
+            })));
 
         //TODO: this might require changes for multiplayer as. there are TargetType.AnyPlayer too
         if (allyTargetCardsAvailable && !_invalidatedActions.Contains("play_card_on_ally"))
@@ -294,12 +294,12 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             {
                 ["card_index"] = QJS.Type(JsonSchemaType.Integer),
                 ["ally_index"] = QJS.Type(JsonSchemaType.Integer)
-            }), persistant_action: true));
+            })));
         }
         if (!_invalidatedActions.Contains("end_turn"))
-            commands.Add(new("end_turn", "Ends your current turn", persistant_action: true));
+            commands.Add(new("end_turn", "Ends your current turn"));
 
-        return new CommandReturn(commands, ForceWindow: false, ForceText: prompt.ToString());
+        return new CommandReturn(commands, true, ForceText: prompt.ToString());
     }
 
 
