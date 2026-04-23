@@ -262,10 +262,10 @@ public class NeuroIntegration : Node
       else
       {
         Plugin.LogDebug($"Is currently forcing: {is_forcing}, Global Actions Count: {GlobalActions.Count}");
-        if (GlobalActions.Count > 0 && !is_forcing)
+        if (GlobalActions.Count > 0 && !is_forcing && new_global_actions.Count > 0)
         {
           Plugin.LogDebug("Forcing new Global Actions with commands: " + string.Join(", ", CommandsList.Commands.Select(c => c.Name)));
-          var force = new ActionsForce(CommandsList.ForceText, null, true, ActionsForce.Priority.Low, GlobalActions);
+          var force = new ActionsForce(CommandsList.ForceText, null, false, ActionsForce.Priority.Low, GlobalActions);
           if (!string.IsNullOrEmpty(contextReturn.Message))
             SendContext(contextReturn.Message, contextReturn.Silent);
           WebsocketConnection.Instance!.Send(force);
