@@ -225,7 +225,6 @@ public class NeuroIntegration : Node
       {
         if (!CommandsList.Persistant)
         {
-          //TODO: figure out if we have mixed actions at all. so we need to also force actionwindow commands ontop of the global ones together and gather them here
           lastWindow!.AddAction(item);
         }
         else
@@ -258,7 +257,6 @@ public class NeuroIntegration : Node
       }
       else
       {
-        // Force an action for every action
         var newactionlist = new List<ConstructedAction>(GlobalActions);
         newactionlist.AddRange(CommandsList.Commands);
         newactionlist = [.. newactionlist.DistinctBy(action => action.Name)];
