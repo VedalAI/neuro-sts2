@@ -177,6 +177,12 @@ public static class GameStabilityDetector
             return false;
         }
 
+        if (ActionExecutor.HasRunningActions())
+        {
+            Plugin.LogDebug("IsStable: integration action still running → false");
+            return false;
+        }
+
         switch (ctx.Type)
         {
             case ContextType.Unknown:

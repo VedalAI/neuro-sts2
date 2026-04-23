@@ -11,6 +11,7 @@ using Sts2Agent.Utilities;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Modding;
 using System.Reflection;
+using System.Threading;
 using HarmonyLib;
 
 namespace Sts2Agent;
@@ -19,9 +20,15 @@ public static class ActionExecutor
 {
 
     private static Queue<ConstructedAction> enqueuedActions = new Queue<ConstructedAction>();
+    private static int runningActions;
     public static bool HasEnqueuedActions()
     {
         return enqueuedActions.Count > 0;
+    }
+
+    public static bool HasRunningActions()
+    {
+        return Volatile.Read(ref runningActions) > 0;
     }
     public static ExecutionResult Validate(ConstructedAction action, ActionJData data, out object? parsedData)
     {
@@ -109,33 +116,46 @@ public static class ActionExecutor
             // Dispatch to the handler matching the current context
             if (Handlers.TryGetValue(ctx.Type, out var handler))
             {
+                Interlocked.Increment(ref runningActions);
                 _ = GodotMainThread.RunAsync(async () =>
                 {
-                    GameStabilityDetector.ResetWasStable();
-                    var task = handler?.Internal_TryExecute(action, ParsedData, ctx);
-                    if (task == null)
+                    var shouldScheduleStabilityCheck = false;
+                    try
                     {
-                        Plugin.LogWarning($"[CRITICAL] Action Returned not awaitable task");
-                        GameStabilityDetector.ScheduleStabilityCheck();
-                        return;
-                    }
-                    var result = await task;
-                    if (result == null)
-                    {
-                        GameStabilityDetector.ScheduleStabilityCheck();
-                        return;
-                    }
+                        GameStabilityDetector.ResetWasStable();
+                        var task = handler?.Internal_TryExecute(action, ParsedData, ctx);
+                        if (task == null)
+                        {
+                            Plugin.LogWarning($"[CRITICAL] Action Returned not awaitable task");
+                            shouldScheduleStabilityCheck = true;
+                            return;
+                        }
+                        var result = await task;
+                        if (result == null)
+                        {
+                            shouldScheduleStabilityCheck = true;
+                            return;
+                        }
 
-                    if (result.Successful)
-                    {
-                        Plugin.LogDebug("Action Successful with message: " + result.Message);
+                        if (result.Successful)
+                        {
+                            Plugin.LogDebug("Action Successful with message: " + result.Message);
+                        }
+                        else
+                        {
+                            Plugin.LogError($"[CRITICAL] Action has Errored during Execution with Message: {result.Message}, The Validation or Execution are wrong for handler of action: {action.Name}");
+                        }
+                        Plugin.LogDebug($"Finished Executing Action: {action.Name}, scheduling stability check...");
+                        shouldScheduleStabilityCheck = true;
                     }
-                    else
+                    finally
                     {
-                        Plugin.LogError($"[CRITICAL] Action has Errored during Execution with Message: {result.Message}, The Validation or Execution are wrong for handler of action: {action.Name}");
+                        Interlocked.Decrement(ref runningActions);
+                        if (shouldScheduleStabilityCheck)
+                        {
+                            GameStabilityDetector.ScheduleStabilityCheck();
+                        }
                     }
-                    Plugin.LogDebug($"Finished Executing Action: {action.Name}, scheduling stability check...");
-                    GameStabilityDetector.ScheduleStabilityCheck();
                 });
                 return;
             }
