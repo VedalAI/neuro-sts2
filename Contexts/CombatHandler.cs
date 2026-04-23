@@ -253,22 +253,22 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             var schema = QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
                 ["card_index"] = QJS.Type(JsonSchemaType.Integer),
-                ["target_index"] = QJS.Type(JsonSchemaType.Integer),
+                ["enemy_index"] = QJS.Type(JsonSchemaType.Integer),
                 ["ally_index"] = QJS.Type(JsonSchemaType.Integer)
             }, false);
             schema.Required = ["card_index"];
-            commands.Add(new("play_card", "Play a card", schema));
+            commands.Add(new("play_card", "Play a card, optionally supply enemy_index or ally_index to specify a target otherwise the first target will be chosen", schema));
         }
         if (!_invalidatedActions.Contains("use_potion"))
         {
             var schema = QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
                 ["potion_index"] = QJS.Type(JsonSchemaType.Integer),
-                ["target_index"] = QJS.Type(JsonSchemaType.Integer),
+                ["enemy_index"] = QJS.Type(JsonSchemaType.Integer),
                 ["ally_index"] = QJS.Type(JsonSchemaType.Integer)
             }, false);
             schema.Required = ["potion_index"];
-            commands.Add(new("use_potion", "Use a potion", schema));
+            commands.Add(new("use_potion", "Use a potion, optionally supply enemy_index or ally_index to specify a target otherwise the first target will be chosen", schema));
         }
         if (!_invalidatedActions.Contains("end_turn"))
             commands.Add(new("end_turn", "Ends your current turn"));
@@ -426,7 +426,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
             if (combatState != null)
             {
                 var aliveEnemies = combatState.HittableEnemies.ToList();
-                if (data.GetValue("target_index", -1) is int targetIndex && targetIndex >= 0)
+                if (data.GetValue("enemy_index", -1) is int targetIndex && targetIndex >= 0)
                 {
                     target = aliveEnemies.ElementAtOrDefault(targetIndex);
                 }
@@ -482,7 +482,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         Creature? target = null;
         if (card!.TargetType == TargetType.AnyEnemy)
         {
-            if (data.GetValue("target_index", -1) is int targetIndex && targetIndex >= 0)
+            if (data.GetValue("enemy_index", -1) is int targetIndex && targetIndex >= 0)
             {
                 Plugin.LogDebug($"target: {targetIndex}");
                 if (targetIndex >= aliveEnemies.Count)
