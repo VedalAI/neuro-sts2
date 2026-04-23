@@ -13,12 +13,11 @@ public struct ContextReturn(string message, bool silent = false)
     public string Message = message;
     public bool Silent = silent;
 }
-public struct CommandReturn(List<ConstructedAction> commands, bool SkipCommands = false, bool ForceWindow = true, string ForceText = "Its your turn to act!")
+public struct CommandReturn(List<ConstructedAction> commands, bool persistant = false, string ForceText = "Its your turn to act!")
 {
     public List<ConstructedAction> Commands = commands;
-    public bool SkipActionWindow = SkipCommands;
-    public bool ForceActionWindow = ForceWindow;
     public string ForceText = ForceText;
+    public bool Persistant = persistant;
 }
 public interface IContextResult { }
 public interface IContextHandler

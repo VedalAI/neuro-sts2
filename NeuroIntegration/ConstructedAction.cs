@@ -20,9 +20,8 @@ public abstract class NeuroActionUnsafe : BaseNeuroAction
 
     protected sealed override void Execute(object? parsedData) => ExecuteUnsafe(parsedData);
 }
-public class ConstructedAction(string name, string description, JsonSchema? schema = null, bool persistant_action = false) : NeuroActionUnsafe
+public class ConstructedAction(string name, string description, JsonSchema? schema = null) : NeuroActionUnsafe
 {
-    public bool Persistant_action = persistant_action;
 
     public override string Name => name;
 
@@ -48,7 +47,7 @@ public class ConstructedAction(string name, string description, JsonSchema? sche
 
     public override string ToString()
     {
-        return $"[{Name}] {description}, Stays Active [{Persistant_action}], jsonSchema {Schema}";
+        return $"[{Name}] {description},  jsonSchema {Schema}";
     }
 
     public bool HasSchema()

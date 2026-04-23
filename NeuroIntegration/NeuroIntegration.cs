@@ -109,6 +109,25 @@ public class NeuroIntegration : Node
     Context.Send(message, silent);
   }
 
+  static bool is_forcing = false;
+  public static void EndForce()
+  {
+    is_forcing = false;
+  }
+
+  public static void Reforce(string force_text)
+  {
+    if (is_forcing)
+    {
+      Plugin.LogWarning("Already Forcing, skipping Reforce call");
+      return;
+    }
+    is_forcing = true;
+    var force = new ActionsForce(force_text, null, true, ActionsForce.Priority.Low, Instance!.GlobalActions);
+    WebsocketConnection.Instance!.Send(force);
+
+  }
+
   ContextType lastContext = ContextType.Unknown;
   public static Action OnContextSwitch;
 
@@ -161,12 +180,6 @@ public class NeuroIntegration : Node
 
     if (ActionExecutor.ProcessEnqueuedActions())
     {
-      StabilityCheckCounter++;
-      if (StabilityCheckCounter >= 20)
-      {
-        Plugin.LogWarning("Forced Action Window has been open for 20 decision points, closing to prevent softlock");
-        lastWindow?.End();
-      }
       return;
     }
     if (lastWindow?.CurrentState == ActionWindow.State.Forced && lastWindow.IsSameContextInfo(ctx))
@@ -195,7 +208,7 @@ public class NeuroIntegration : Node
         GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
         return;
       }
-      Plugin.LogDebug($"Commands list contains {CommandsList.Commands.Count} commands. SkipActionWindow: {CommandsList.SkipActionWindow}");
+      Plugin.LogDebug($"Commands list contains {CommandsList.Commands.Count} commands. Is a Persistant CommandReturn: {CommandsList.Persistant}");
       if (CommandsList.Commands.Count == 1 && !CommandsList.Commands[0].HasSchema())
       {
         ActionExecutor.EnqueueAction(CommandsList.Commands[0]);
@@ -205,26 +218,19 @@ public class NeuroIntegration : Node
         UnregisterAllActions();
         return;
       }
-      if (CommandsList.SkipActionWindow && !CommandsList.Commands.Any(cmd => cmd.HasSchema()) && CommandsList.Commands.Count <= 1)
-      {
-        if (!string.IsNullOrEmpty(contextReturn.Message))
-          SendContext(contextReturn.Message, contextReturn.Silent);
-        Plugin.LogDebug("Context Handler requested to Skip, not sending Action Window");
-        return;
-      }
-      lastWindow = ActionWindow.Create(this, ctx).SetContext(contextReturn.Message, contextReturn.Silent);
+      if (!CommandsList.Persistant)
+        lastWindow = ActionWindow.Create(this, ctx).SetContext(contextReturn.Message, contextReturn.Silent);
       var new_global_actions = new List<ConstructedAction>();
-      var hasNonPersistant = false;
       foreach (var item in CommandsList.Commands)
       {
-        if (!item.Persistant_action)
+        if (!CommandsList.Persistant)
         {
-          hasNonPersistant = true;
-          lastWindow.AddAction(item);
+          //TODO: figure out if we have mixed actions at all. so we need to also force actionwindow commands ontop of the global ones together and gather them here
+          lastWindow!.AddAction(item);
         }
         else
         {
-          if (GlobalActions.Find((action) => action.Name == item.Name) == null && !new_global_actions.Any(action => action.Name == item.Name))
+          if (!GlobalActions.Any(action => action.Name == item.Name) && !new_global_actions.Any(action => action.Name == item.Name))
           {
             GlobalActions.Add(item);
             new_global_actions.Add(item);
@@ -244,32 +250,26 @@ public class NeuroIntegration : Node
       }
       if (new_global_actions.Count > 0)
         NeuroActionHandler.RegisterActions(new_global_actions);
-      if (CommandsList.ForceActionWindow)
+      if (!CommandsList.Persistant)
       {
-        lastWindow.SetForce(0, CommandsList.ForceText, null);
-        if (hasNonPersistant)
-          lastWindow.Register();
+        lastWindow!.SetForce(0, CommandsList.ForceText, null);
+        lastWindow!.Register();
+        is_forcing = true;
       }
       else
       {
         // Force an action for every action
-        var currentCommandslist = CommandsList.Commands.ToList();
-        var oldGlobalActions = GlobalActions.ToList();
-        var force = new ActionsForce(CommandsList.ForceText, null, true, ActionsForce.Priority.Low, currentCommandslist.ToList());
-        var commandsChanged = currentCommandslist.Except(CommandsList.Commands).Any() || !currentCommandslist.All(CommandsList.Commands.Contains);
-        var globalActionsChanged = !oldGlobalActions.All(GlobalActions.Contains) || GlobalActions.Count <= 0 || CommandsList.Commands.Count <= 0;
-        if (globalActionsChanged || commandsChanged)
+        var newactionlist = new List<ConstructedAction>(GlobalActions);
+        newactionlist.AddRange(CommandsList.Commands);
+        newactionlist = [.. newactionlist.DistinctBy(action => action.Name)];
+        if (newactionlist.Count <= 0)
         {
-          Plugin.LogDebug("Not sending force, Global Actions or commands have changed or are empty");
-          GameStabilityDetector.ResetWasStable();
-          GameStabilityDetector.ScheduleStabilityCheck();
-          return;
+          var force = new ActionsForce(CommandsList.ForceText, null, true, ActionsForce.Priority.Low, newactionlist);
+          if (!string.IsNullOrEmpty(contextReturn.Message))
+            SendContext(contextReturn.Message, contextReturn.Silent);
+          WebsocketConnection.Instance!.Send(force);
+          is_forcing = true;
         }
-        if (!string.IsNullOrEmpty(contextReturn.Message))
-          SendContext(contextReturn.Message, contextReturn.Silent);
-        if (hasNonPersistant)
-          lastWindow.Register();
-        WebsocketConnection.Instance!.Send(force);
       }
       GodotMainThread.RunAsync(async () => { await Task.Delay(2000); GameStabilityDetector.ScheduleStabilityCheck(); });
     }
