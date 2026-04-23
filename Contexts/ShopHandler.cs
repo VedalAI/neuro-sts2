@@ -59,7 +59,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         }
 
         var forceText = new StringBuilder();
-        getForceText(forceText, ctx);
+        getForceText(forceText);
         if (ctx.ShopItems!.Any(x => x.EnoughGold))
             commands.Add(new("shop_buy", "Buy an item. use the index of the item to buy it.", QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
@@ -72,19 +72,23 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         return new CommandReturn(commands, true, ForceText: forceText.ToString());
     }
 
-    private void getForceText(StringBuilder forceText, ContextInfo ctx)
+    private void getForceText(StringBuilder forceText)
     {
+        var ctx = GameContext.Resolve();
         var player = LocalContext.GetMe(ctx.RunState.Players);
+        Plugin.LogDebug("test");
         forceText.AppendLine($"Please buy an item or leave the shop if you are done with your purchases. You have {player!.Gold} gold to spend.");
         var item_index = 0;
         if (ctx.ShopItems != null)
         {
             if (ctx.ShopItems.Any(x => x.EnoughGold))
                 forceText.AppendLine("Available items:");
+            Plugin.LogDebug("test2");
             foreach (var entry in ctx.ShopItems)
             {
-                if (entry.EnoughGold)
+                if (entry != null && entry.IsStocked && entry.EnoughGold)
                 {
+                    Plugin.LogDebug($"test3 {entry}");
                     forceText.AppendLine($"- [{item_index}] {GetEntryName(entry)} for {entry.Cost} gold. Description: {GetEntryDescription(entry).AsSingleLine()}");
                 }
                 item_index++;
@@ -205,10 +209,10 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         finally
         {
             actionQueue.ActionFinished();
-            if (action.Name != "shop_leave" && actionQueue.Count <= 0)
+            if (action.Name != "shop_leave" && action.Name != "shop_open" && actionQueue.Count <= 0)
             {
                 var stringBuilder = new StringBuilder();
-                getForceText(stringBuilder, ctx);
+                getForceText(stringBuilder);
                 NeuroIntegration.Reforce(stringBuilder.ToString());
 
             }
@@ -219,16 +223,17 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
     {
         projectedGoldAfterPurchase = 0;
         await GodotMainThread.ClickAsync(result.Button);
+        await Task.Delay(500);
         Plugin.Log("Opened shop inventory");
         return ExecutionResult.Success();
     }
 
     private async Task<ExecutionResult> ShopBuy(Result root, ContextInfo ctx)
     {
+        projectedGoldAfterPurchase -= root.BuyItem.Cost;
         await GodotMainThread.RunAsync(() => root.BuyItem.OnTryPurchaseWrapper(ctx.ShopInventory));
         await Task.Delay(300);
-        Plugin.Log($"Bought shop item {root.BuyItem}");
-        projectedGoldAfterPurchase -= root.BuyItem.Cost;
+        // Plugin.Log($"Bought shop item {root.BuyItem}");
         return ExecutionResult.Success();
     }
 
