@@ -115,6 +115,11 @@ public class NeuroIntegration : Node
     is_forcing = false;
   }
 
+  public static bool IsForcing()
+  {
+    return is_forcing;
+  }
+
   public static void Reforce(string force_text)
   {
     if (is_forcing)
