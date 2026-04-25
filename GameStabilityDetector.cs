@@ -14,6 +14,7 @@ using Sts2Agent.Utilities;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.RestSite;
+using MegaCrit.Sts2.Core.Context;
 
 namespace Sts2Agent;
 
@@ -223,12 +224,14 @@ public static class GameStabilityDetector
             case ContextType.Combat:
                 {
                     var cm = CombatManager.Instance;
+                    var pcs = LocalContext.GetMe(ctx.RunState.Players)?.PlayerCombatState;
                     var result = cm != null
-                        && cm.IsPlayPhase
+                        && pcs != null
+                        && pcs.Phase == PlayerTurnPhase.Play
                         && !cm.PlayerActionsDisabled
                         && RunManager.Instance.ActionExecutor.CurrentlyRunningAction == null;
-                    if (cm != null)
-                        Plugin.LogDebug($"IsStable: combat → IsPlayPhase={cm?.IsPlayPhase}, ActionsDisabled={cm?.PlayerActionsDisabled}, RunningAction={RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.GetType().Name ?? "null"} → {result}");
+                    if (cm != null && pcs != null)
+                        Plugin.LogDebug($"IsStable: combat → IsPlayPhase={pcs?.Phase == PlayerTurnPhase.Play}, Current Phase= {pcs?.Phase}, ActionsDisabled={cm?.PlayerActionsDisabled}, RunningAction={RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.GetType().Name ?? "null"} → {result}");
                     return result;
                 }
 
