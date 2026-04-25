@@ -95,10 +95,6 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
     {
-        if (!_isRevalidation)
-        {
-            NeuroIntegration.EndForce();
-        }
 
         var rewardsScreen = ctx.RewardsScreen;
         if (rewardsScreen == null)
