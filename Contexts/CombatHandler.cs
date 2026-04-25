@@ -200,11 +200,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
 
         var commands = new List<ConstructedAction>();
         var cm = CombatManager.Instance;
-        if (cm == null || !cm.IsPlayPhase || cm.PlayerActionsDisabled) return new CommandReturn();
+        if (cm == null || cm.PlayerActionsDisabled) return new CommandReturn();
 
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var pcs = player.PlayerCombatState;
-        if (pcs == null) return new CommandReturn();
+        if (pcs == null || (pcs != null && pcs.Phase != PlayerTurnPhase.Play)) return new CommandReturn();
 
         var prompt = new StringBuilder();
         prompt.AppendLine("# It's your turn");
@@ -287,7 +287,10 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         var cm = CombatManager.Instance;
         if (cm == null) return ExecutionResult.Failure("Not in combat");
         if (cm.IsOverOrEnding) return ExecutionResult.Failure("Combat is ending");
-        if (!cm.IsPlayPhase || !cm.IsInProgress) return ExecutionResult.ModFailure("Not in play phase");
+        var pcs = LocalContext.GetMe(ctx.RunState.Players)?.PlayerCombatState;
+
+        if (pcs == null) return ExecutionResult.Failure("Player combat state not found");
+        if (pcs.Phase != PlayerTurnPhase.Play || !cm.IsInProgress) return ExecutionResult.ModFailure("Not in play phase");
         var player = LocalContext.GetMe(ctx.RunState.Players);
         if (player == null) return ExecutionResult.ModFailure("Player not found");
         if (action.Name.StartsWith("play_card"))
@@ -627,8 +630,10 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         actionQueue.Clear();
         NeuroIntegration.UnregisterAllActions();
 
-        var cm = CombatManager.Instance;
-        if (!cm.IsPlayPhase)
+        var pcs = LocalContext.GetMe(ctx.RunState.Players)?.PlayerCombatState;
+
+        if (pcs == null) return ExecutionResult.Failure("Player combat state not found");
+        if (pcs.Phase != PlayerTurnPhase.Play)
             return ExecutionResult.Failure("Not in play phase");
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var roundNumber = player.Creature.CombatState.RoundNumber;
