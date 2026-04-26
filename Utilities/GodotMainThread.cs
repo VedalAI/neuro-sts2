@@ -44,8 +44,10 @@ public static class GodotMainThread
 
     public static async Task ClickAsync(NClickableControl button, int delayMs = 300)
     {
-        if (button == null || !button.IsVisibleInTree())
-            return;
+        if (button == null)
+            throw new ArgumentNullException(nameof(button), "Tried to click a null control.");
+        if (!GodotObject.IsInstanceValid(button) || !button.IsVisibleInTree())
+            throw new InvalidOperationException($"Tried to click an unavailable control: {button.GetType().Name}");
         await RunAsync(() => button.ForceClick());
         if (delayMs > 0) await Task.Delay(delayMs);
     }
