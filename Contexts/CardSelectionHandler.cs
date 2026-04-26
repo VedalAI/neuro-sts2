@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
@@ -22,6 +23,10 @@ namespace Sts2Agent.Contexts;
 
 public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
 {
+    private const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+    private static readonly Dictionary<Type, FieldInfo?> CompletionSourceFields = [];
+    private static readonly Dictionary<Type, FieldInfo?> PrefsFields = [];
+
     public ContextType Type => ContextType.CardSelection;
 
 
@@ -39,13 +44,8 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
         var cardHolders = ctx.CardHolders;
         if (cardHolders == null) return new ContextReturn(stringBuilder.ToString());
         // Don't offer commands until the screen is fully initialized (_completionSource set)
-        if (ctx.OverlayScreen != null)
-        {
-            var tcsField = ctx.OverlayScreen.GetType().GetField("_completionSource",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (tcsField != null && tcsField.GetValue(ctx.OverlayScreen) == null)
-                return new ContextReturn(stringBuilder.ToString());
-        }
+        if (!IsSelectionScreenReady(ctx.OverlayScreen))
+            return new ContextReturn(stringBuilder.ToString());
         var cardModels = cardHolders.Select(x => x.CardModel);
         if (cardModels == null || !cardModels.Any())
             return new ContextReturn(stringBuilder.ToString());
@@ -60,27 +60,9 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
         if (cardHolders == null) return new CommandReturn();
 
         // Don't offer commands until the screen is fully initialized (_completionSource set)
-        if (ctx.OverlayScreen != null)
-        {
-            var tcsField = ctx.OverlayScreen.GetType().GetField("_completionSource",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (tcsField != null && tcsField.GetValue(ctx.OverlayScreen) == null)
-                return new CommandReturn();
-        }
-        var min_select = 1;
-        var max_select = 1;
-        var prefsField = ctx.OverlayScreen?.GetType().GetField("_prefs",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        if (prefsField != null)
-        {
-            try
-            {
-                dynamic prefs = prefsField.GetValue(ctx.OverlayScreen)!;
-                min_select = (int)prefs.MinSelect;
-                max_select = (int)prefs.MaxSelect;
-            }
-            catch { }
-        }
+        if (!IsSelectionScreenReady(ctx.OverlayScreen))
+            return new CommandReturn();
+        var (min_select, max_select) = GetSelectionBounds(ctx.OverlayScreen);
         Plugin.LogDebug($"min_select: {min_select}, max_select:{max_select}");
         var prompt = new StringBuilder();
         if (max_select > 1)
@@ -199,16 +181,14 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
         Plugin.LogDebug("Selecting card: " + result.SelectedCard?.ToString());
 
         // Wait for _completionSource to be set
-        var tcsField = ctx.OverlayScreen.GetType().GetField("_completionSource",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        if (tcsField != null)
+        if (ctx.OverlayScreen != null)
         {
             for (int attempt = 0; attempt < 10; attempt++)
             {
-                if (tcsField.GetValue(ctx.OverlayScreen) != null) break;
+                if (IsSelectionScreenReady(ctx.OverlayScreen)) break;
                 await Task.Delay(100);
             }
-            if (tcsField.GetValue(ctx.OverlayScreen) == null)
+            if (!IsSelectionScreenReady(ctx.OverlayScreen))
                 return ExecutionResult.Failure("Card selection screen not ready (_completionSource is null)");
         }
 
@@ -335,6 +315,49 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
         }
 
         return ExecutionResult.Failure("No skip or proceed button found");
+    }
+
+    private static bool IsSelectionScreenReady(object? overlayScreen)
+    {
+        if (overlayScreen == null)
+            return true;
+
+        var completionSourceField = GetCachedField(CompletionSourceFields, overlayScreen, "_completionSource");
+        return completionSourceField == null || completionSourceField.GetValue(overlayScreen) != null;
+    }
+
+    private static (int MinSelect, int MaxSelect) GetSelectionBounds(object? overlayScreen)
+    {
+        if (overlayScreen == null)
+            return (1, 1);
+
+        var prefsField = GetCachedField(PrefsFields, overlayScreen, "_prefs");
+        if (prefsField == null)
+            return (1, 1);
+
+        try
+        {
+            dynamic prefs = prefsField.GetValue(overlayScreen)!;
+            return ((int)prefs.MinSelect, (int)prefs.MaxSelect);
+        }
+        catch (Exception e)
+        {
+            Plugin.LogWarning($"CardSelectionHandler: couldn't read _prefs on {overlayScreen.GetType().Name}: {e.Message}");
+            return (1, 1);
+        }
+    }
+
+    private static FieldInfo? GetCachedField(Dictionary<Type, FieldInfo?> cache, object owner, string fieldName)
+    {
+        var type = owner.GetType();
+        if (cache.TryGetValue(type, out var field))
+            return field;
+
+        field = type.GetField(fieldName, PrivateInstance);
+        cache[type] = field;
+        if (field == null)
+            Plugin.LogWarning($"CardSelectionHandler: couldn't find private field '{fieldName}' on {type.Name}");
+        return field;
     }
 
     private static async Task WaitForOverlayClose(Node overlayNode, object overlay, int timeoutMs = 5000)
