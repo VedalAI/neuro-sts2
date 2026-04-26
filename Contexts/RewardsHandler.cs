@@ -19,7 +19,7 @@ using Sts2Agent.Utilities;
 
 namespace Sts2Agent.Contexts;
 
-public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContextSwitch
+public class RewardsHandler : AbstractQueuedHandler<RewardsHandler.Result>, IOnContextSwitch
 {
     public class Result : IContextResult
     {
@@ -31,13 +31,11 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
 
     private sealed record RewardEntry(int Index, string DisplayLabel, string Description, NRewardButton Button);
 
-    private readonly ActionQueue actionQueue = new();
     private readonly HashSet<ulong> _reservedRewardButtonIds = [];
-    private bool _isRevalidation;
 
-    public ContextType Type => ContextType.Rewards;
+    public override ContextType Type => ContextType.Rewards;
 
-    public ContextReturn GetContext(ContextInfo ctx)
+    public override ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
 
@@ -61,7 +59,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         return new ContextReturn(stringBuilder.ToString());
     }
 
-    public CommandReturn GetCommands(ContextInfo ctx)
+    public override CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
         var rewardsScreen = ctx.RewardsScreen;
@@ -78,7 +76,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
                 ["reward_index"] = QJS.Type(JsonSchemaType.Integer)
             })));
         }
-        bool persistant = true;
+        bool persistent = true;
 
         var proceedButton = UiHelper.FindFirst<NProceedButton>((Node)rewardsScreen);
         if (proceedButton?.IsEnabled == true)
@@ -87,13 +85,13 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
             else
             {
                 commands.Add(new("proceed", "Proceed from the rewards room"));
-                persistant = false;
+                persistent = false;
             }
 
-        return new CommandReturn(commands, persistant, ForceText: forceText.ToString());
+        return new CommandReturn(commands, persistent, ForceText: forceText.ToString());
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
+    public override ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
     {
 
         var rewardsScreen = ctx.RewardsScreen;
@@ -102,7 +100,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
 
         if (action.Name == "claim_reward")
         {
-            if (_isRevalidation)
+            if (IsRevalidation)
             {
                 if (result.Button == null)
                 {
@@ -163,66 +161,38 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
         }
         return ExecutionResult.Success();
     }
-    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
+    protected override async Task<ExecutionResult?> ExecuteQueuedAction(ConstructedAction action, Result result, ContextInfo ctx)
     {
-        var queueResult = await actionQueue.GetExecution();
-        if (!queueResult.Successful)
+        return action.Name switch
         {
-            Plugin.LogDebug($"ActionQueue: action '{action.Name}' was rejected or cancelled: {queueResult.Message}");
-            ReleaseReservedReward(result);
-            actionQueue.AddToDiscardedActionText($"- couldn't {GetActionDescription(action, result)} due to {queueResult.Message}");
-            if (actionQueue.Count == 0)
-                actionQueue.SendDiscardedActionText();
-            return queueResult;
+            "proceed" or "skip_rewards" => await Proceed(result),
+            "claim_reward" => await SelectReward(result),
+            _ => null
+        };
+    }
+
+    protected override string DescribeAction(ConstructedAction action, Result result)
+        => GetActionDescription(action, result);
+
+    protected override void CleanupQueuedFailure(Result result)
+        => ReleaseReservedReward(result);
+
+    protected override string GetContextChangedMessage(ConstructedAction action, Result result)
+        => "Context changed, no longer on rewards";
+
+    protected override void OnAfterQueuedAction(ConstructedAction action, Result result, ContextInfo freshCtx)
+    {
+        if (action.Name is "proceed" or "skip_rewards" || ActionQueue.Count > 1)
+        {
+            return;
         }
 
-        var freshCtx = GameContext.Resolve();
-        if (freshCtx == null || freshCtx.Type != ContextType.Rewards)
+        var currentCtx = GameContext.Resolve();
+        if (currentCtx?.Type == ContextType.Rewards && currentCtx.RewardsScreen != null)
         {
-            Plugin.LogDebug($"ActionQueue: context changed while waiting for '{action.Name}'");
-            ReleaseReservedReward(result);
-            actionQueue.ActionFinished();
-            return ExecutionResult.Failure("Context changed, no longer on rewards");
-        }
-
-        _isRevalidation = true;
-        var revalidation = Validate(action, action.Data, result, freshCtx);
-        _isRevalidation = false;
-        if (!revalidation.Successful)
-        {
-            Plugin.LogDebug($"ActionQueue: action '{action.Name}' failed revalidation: {revalidation.Message}");
-            ReleaseReservedReward(result);
-            actionQueue.ActionFinished();
-            actionQueue.AddToDiscardedActionText($"- {GetActionDescription(action, result)} was cancelled due to {revalidation.Message}");
-            if (actionQueue.Count == 0)
-                actionQueue.SendDiscardedActionText();
-            return revalidation;
-        }
-
-        actionQueue.MarkExecuting();
-
-        try
-        {
-            return action.Name switch
-            {
-                "proceed" or "skip_rewards" => await Proceed(result),
-                "claim_reward" => await SelectReward(result),
-                _ => null
-            };
-        }
-        finally
-        {
-            if (action.Name is not ("proceed" or "skip_rewards") && actionQueue.Count <= 1)
-            {
-                var currentCtx = GameContext.Resolve();
-                if (currentCtx?.Type == ContextType.Rewards && currentCtx.RewardsScreen != null)
-                {
-                    var forceText = new StringBuilder();
-                    GetForceText(forceText, GetRewardEntries(currentCtx.RewardsScreen));
-                    NeuroIntegration.Reforce(forceText.ToString());
-                }
-            }
-            actionQueue.ActionFinished();
+            var forceText = new StringBuilder();
+            GetForceText(forceText, GetRewardEntries(currentCtx.RewardsScreen));
+            NeuroIntegration.Reforce(forceText.ToString());
         }
     }
 
@@ -245,7 +215,7 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
     private async Task<ExecutionResult> Proceed(Result result)
     {
         // Try proceed button on rewards overlay first
-        actionQueue.Clear();
+        ActionQueue.Clear();
         _reservedRewardButtonIds.Clear();
         await GodotMainThread.ClickAsync(result.Button);
         await Task.Delay(500); // Wait for the next room to load
@@ -338,9 +308,9 @@ public class RewardsHandler : IContextHandler<RewardsHandler.Result>, IOnContext
     public void OnContextSwitch(ContextType newContext)
     {
 
-        actionQueue.Clear();
+        ActionQueue.Clear();
         NeuroIntegration.UnregisterAllActions();
         _reservedRewardButtonIds.Clear();
-        _isRevalidation = false;
+        ResetQueuedHandlerState();
     }
 }
