@@ -43,13 +43,13 @@ public static class ActionExecutor
             // Dispatch to the handler matching the current context
             if (Handlers.TryGetValue(ctx.Type, out var handler))
             {
-                NeuroIntegration.EndForce();
                 var result = handler.Internal_Validate(action, data, out parsedData, ctx);
+                NeuroIntegration.EndForce();
                 //This can happen if situation is stable. but GetCommands returned stale actions, like buttons not found due to overlay not being populated yet (game async population)
                 //Should be used very very sparingly
                 if (result.IsUnstable)
                 {
-                    Plugin.LogError("Stable situation but Action Window has Stale Actions, reseting");
+                    Plugin.LogError("Stable situation but Action Window has Stale Actions, resetting");
                     action.ActionWindow?.End();
                     NeuroIntegration.EndForce();
                     GameStabilityDetector.ResetWasStable();
@@ -60,10 +60,12 @@ public static class ActionExecutor
                 return result;
             }
 
+            NeuroIntegration.EndForce();
             return ExecutionResult.Failure($"Unknown action '{action.Name}' for context '{ctx.Type}'");
         }
         catch (Exception e)
         {
+            NeuroIntegration.EndForce();
             Plugin.LogError($"Action execution error: {e}");
             return ExecutionResult.Failure(e.Message);
         }
