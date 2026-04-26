@@ -33,7 +33,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
         var evt = eventRoom.LocalMutableEvent;
         if (evt == null)
         {
-            return new ContextReturn($"You are in the Event: {eventRoom.CanonicalEvent.Title.GetUnformatedText()}");
+            return new ContextReturn($"You are in the Event: {eventRoom.CanonicalEvent.Title.GetUnformattedText()}");
         }
 
         StringBuilder eventBuilder = new();
@@ -48,7 +48,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
             {
                 eventBuilder.AppendLine();
                 eventBuilder.AppendLine("**Event description:**");
-                eventBuilder.AppendLine(desc.GetUnformatedText());
+                eventBuilder.AppendLine(desc.GetUnformattedText());
             }
             else
             {
@@ -78,7 +78,7 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
                 if (optDesc != null)
                 {
                     evt.DynamicVars.AddTo(optDesc);
-                    eventBuilder.AppendLine(optDesc.GetUnformatedText());
+                    eventBuilder.AppendLine(optDesc.GetUnformattedText());
                 }
                 else
                 {

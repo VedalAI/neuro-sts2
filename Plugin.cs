@@ -43,12 +43,7 @@ public static class Plugin
 
             RunManager.Instance.RoomEntered += OnRoomEntered;
 
-
-            // Server = new HttpServer(57541);
-            // Server.Start();
-            // NeuroSdkSetup.Initialize("Slay the Spire 2");
-
-            Log("Plugin initialized. Patches applied. HTTP server started.");
+            Log("Plugin initialized. Patches applied.");
         }
         catch (Exception e)
         {

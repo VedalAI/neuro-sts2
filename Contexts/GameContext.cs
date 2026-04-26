@@ -38,7 +38,7 @@ public enum ContextType
     GameOver,
     CharacterSelect,
     MainMenu,
-    CrstalBallEvent,
+    CrystalBallEvent,
     TimelinesEvent,
     Unknown,
 }
@@ -106,7 +106,7 @@ public class ContextInfo : IEqualityComparer<ContextInfo>
             { Type: ContextType.Shop } => x.MerchantRoom != null && y.MerchantRoom != null && x.MerchantRoom == y.MerchantRoom && x.MerchantRoom.Inventory.AllEntries == y.MerchantRoom.Inventory.AllEntries,
             { Type: ContextType.BundleSelection } => x.BundleScreen != null && y.BundleScreen != null && x.BundleScreen == y.BundleScreen && x.Bundles != null && y.Bundles != null && x.Bundles.SequenceEqual(y.Bundles),
             { Type: ContextType.GameOver } => true, // Game over context is determined by run state, which is already checked by reference equality in RunState
-            { Type: ContextType.CrstalBallEvent } => GodotObject.IsInstanceValid(x.CrystalSphereScreen) && GodotObject.IsInstanceValid(y.CrystalSphereScreen) && x.CrystalSphereScreen == y.CrystalSphereScreen,
+            { Type: ContextType.CrystalBallEvent } => GodotObject.IsInstanceValid(x.CrystalSphereScreen) && GodotObject.IsInstanceValid(y.CrystalSphereScreen) && x.CrystalSphereScreen == y.CrystalSphereScreen,
             { Type: ContextType.TimelinesEvent } => GodotObject.IsInstanceValid(x.TimelineScreen) && GodotObject.IsInstanceValid(y.TimelineScreen) && x.TimelineScreen == y.TimelineScreen,
             _ => true // For contexts where we don't have specific equality checks, default to true
         };
@@ -130,7 +130,7 @@ public class ContextInfo : IEqualityComparer<ContextInfo>
             ContextType.Shop => obj.MerchantRoom != null ? HashCode.Combine(obj.MerchantRoom.GetHashCode(), obj.MerchantRoom.Inventory.AllEntries.GetHashCode()) : 0,
             ContextType.BundleSelection => obj.BundleScreen != null && obj.Bundles != null ? HashCode.Combine(obj.BundleScreen.GetHashCode(), obj.Bundles.Aggregate(0, (acc, b) => acc ^ b.GetHashCode())) : 0,
             ContextType.GameOver => obj.RunState != null ? obj.RunState.GetHashCode() : 0,
-            ContextType.CrstalBallEvent => GodotObject.IsInstanceValid(obj.CrystalSphereScreen) ? obj.CrystalSphereScreen.GetHashCode() : 0,
+            ContextType.CrystalBallEvent => GodotObject.IsInstanceValid(obj.CrystalSphereScreen) ? obj.CrystalSphereScreen.GetHashCode() : 0,
             ContextType.TimelinesEvent => GodotObject.IsInstanceValid(obj.TimelineScreen) ? obj.TimelineScreen.GetHashCode() : 0,
             _ => 0
         };
@@ -273,7 +273,7 @@ public static class GameContext
             {
                 return new ContextInfo
                 {
-                    Type = ContextType.CrstalBallEvent,
+                    Type = ContextType.CrystalBallEvent,
                     RunState = runState,
                     CrystalSphereScreen = CrystalSphereEvent
                 };
