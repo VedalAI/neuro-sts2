@@ -232,9 +232,11 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
         if (action.Name == "view_timeline")
         {
             await GodotMainThread.ClickAsync(result.Button);
+            await Task.Delay(500);
+            return ExecutionResult.Success("Opened the timeline");
         }
 
-        return null;
+        return ExecutionResult.Failure("Unknown action");
     }
 
 }
