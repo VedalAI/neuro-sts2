@@ -18,21 +18,18 @@ using NeuroSdk.Json;
 
 namespace Sts2Agent.Contexts;
 
-public class ShopHandler : IContextHandler<ShopHandler.Result>
+public class ShopHandler : AbstractQueuedHandler<ShopHandler.Result>
 {
     public class Result : IContextResult
     {
         public MerchantEntry BuyItem;
         internal NButton Button;
     }
-    public ContextType Type => ContextType.Shop;
+    public override ContextType Type => ContextType.Shop;
     bool firstContext = true;
 
-    ActionQueue actionQueue = new();
-
-    bool _isRevalidation = false;
     int projectedGoldAfterPurchase = 0;
-    public ContextReturn GetContext(ContextInfo ctx)
+    public override ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
 
@@ -47,14 +44,13 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
 
         return new ContextReturn(stringBuilder.ToString(), !firstContext);
     }
-    public CommandReturn GetCommands(ContextInfo ctx)
+    public override CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
 
         if (!ctx.ShopIsOpen)
         {
             commands.Add(new("shop_open", "Open the shop"));
-            // commands.Add(new("shop_leave", "Leave the shop"));
             return new CommandReturn(commands);
         }
 
@@ -76,19 +72,16 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
     {
         var ctx = GameContext.Resolve();
         var player = LocalContext.GetMe(ctx.RunState.Players);
-        Plugin.LogDebug("test");
         forceText.AppendLine($"Please buy an item or leave the shop if you are done with your purchases. You have {player!.Gold} gold to spend.");
         var item_index = 0;
         if (ctx.ShopItems != null)
         {
             if (ctx.ShopItems.Any(x => x.EnoughGold))
                 forceText.AppendLine("Available items:");
-            Plugin.LogDebug("test2");
             foreach (var entry in ctx.ShopItems)
             {
                 if (entry != null && entry.IsStocked && entry.EnoughGold)
                 {
-                    Plugin.LogDebug($"test3 {entry}");
                     forceText.AppendLine($"- [{item_index}] {GetEntryName(entry)} for {entry.Cost} gold. Description: {GetEntryDescription(entry).AsSingleLine()}");
                 }
                 item_index++;
@@ -96,12 +89,8 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         }
     }
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
+    public override ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
-        if (!_isRevalidation)
-        {
-            NeuroIntegration.EndForce();
-        }
         if (action.Name == "shop_open")
         {
 
@@ -148,7 +137,7 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
                 return ExecutionResult.Failure($"Item not found at index {itemIndex}");
             if (!entry.EnoughGold)
                 return ExecutionResult.Failure("Not enough gold to buy this item");
-            if (!_isRevalidation)
+            if (!IsRevalidation)
             {
                 //check if the player has enough gold after considering the projected cost of previous purchases that haven't executed yet
                 var player = LocalContext.GetMe(ctx.RunState.Players);
@@ -164,58 +153,27 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         return ExecutionResult.Success();
     }
 
-    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
-
+    protected override async Task<ExecutionResult?> ExecuteQueuedAction(ConstructedAction action, Result result, ContextInfo ctx)
     {
-        var queueResult = await actionQueue.GetExecution();
-        if (!queueResult.Successful)
+        if (action.Name == "shop_open") return await ShopOpen(result);
+        if (action.Name == "shop_buy") return await ShopBuy(result, ctx);
+        if (action.Name == "shop_leave") return await ShopLeave(result);
+        return ExecutionResult.Failure("Invalid shop action");
+    }
+
+    protected override string GetContextChangedMessage(ConstructedAction action, Result result)
+        => "Context changed, no longer in shop";
+
+    protected override void OnAfterQueuedAction(ConstructedAction action, Result result, ContextInfo freshCtx)
+    {
+        if (action.Name is "shop_leave" or "shop_open" || ActionQueue.Count > 1)
         {
-            Plugin.LogDebug($"ActionQueue: action '{action.Name}' was rejected or cancelled: {queueResult.Message}");
-            actionQueue.AddToDiscardedActionText($"- couldn't {action.Name} due to {queueResult.Message}");
-            if (actionQueue.Count == 0)
-                actionQueue.SendDiscardedActionText();
-            return queueResult;
-        }
-        var freshCtx = GameContext.Resolve();
-        if (freshCtx == null || freshCtx.Type != ContextType.Shop)
-        {
-            Plugin.LogDebug($"ActionQueue: context changed while waiting for '{action.Name}'");
-            actionQueue.ActionFinished();
-            return ExecutionResult.Failure("Context changed, no longer in shop");
+            return;
         }
 
-        var freshResult = new Result();
-        _isRevalidation = true;
-        var revalidation = Validate(action, action.Data, freshResult, freshCtx);
-        _isRevalidation = false;
-        if (!revalidation.Successful)
-        {
-            Plugin.LogDebug($"ActionQueue: action '{action.Name}' failed revalidation: {revalidation.Message}");
-            actionQueue.ActionFinished();
-            actionQueue.AddToDiscardedActionText($"- {action.Name} was cancelled due to {revalidation.Message}");
-            if (actionQueue.Count == 0)
-                actionQueue.SendDiscardedActionText();
-            return revalidation;
-        }
-        actionQueue.MarkExecuting();
-
-        try
-        {
-            if (action.Name == "shop_open") return await ShopOpen(result);
-            if (action.Name == "shop_buy") return await ShopBuy(result, ctx);
-            if (action.Name == "shop_leave") return await ShopLeave(result);
-            return ExecutionResult.Failure("Invalid shop action");
-        }
-        finally
-        {
-            if (action.Name != "shop_leave" && action.Name != "shop_open" && actionQueue.Count <= 1)
-            {
-                var stringBuilder = new StringBuilder();
-                getForceText(stringBuilder);
-                NeuroIntegration.Reforce(stringBuilder.ToString());
-            }
-            actionQueue.ActionFinished();
-        }
+        var stringBuilder = new StringBuilder();
+        getForceText(stringBuilder);
+        NeuroIntegration.Reforce(stringBuilder.ToString());
     }
 
     private async Task<ExecutionResult> ShopOpen(Result result)
@@ -232,7 +190,6 @@ public class ShopHandler : IContextHandler<ShopHandler.Result>
         projectedGoldAfterPurchase -= root.BuyItem.Cost;
         await GodotMainThread.RunAsync(() => root.BuyItem.OnTryPurchaseWrapper(ctx.ShopInventory));
         await Task.Delay(300);
-        // Plugin.Log($"Bought shop item {root.BuyItem}");
         return ExecutionResult.Success();
     }
 

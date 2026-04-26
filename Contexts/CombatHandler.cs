@@ -26,7 +26,7 @@ using MegaCrit.Sts2.Core.Hooks;
 
 namespace Sts2Agent.Contexts;
 
-public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSwitch
+public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnContextSwitch
 {
     public class Result : IContextResult
     {
@@ -34,9 +34,8 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         internal CardModel? Card;
         internal PotionModel Potion;
     }
-    public ContextType Type => ContextType.Combat;
+    public override ContextType Type => ContextType.Combat;
     bool firstContext = true;
-    readonly ActionQueue actionQueue = new();
 
     // Projected resource tracking for queued-but-not-yet-executed actions.
     // Synced to actual state on new rounds or when the action queue drains.
@@ -44,12 +43,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
     int _projectedStarsRemaining = int.MaxValue;
     readonly HashSet<PotionModel> _projectedPotionsUsed = new();
     int _lastProjectedRound = -1;
-    bool _isRevalidation = false;
     // Actions invalidated by projected resource tracking that should not be re-registered
     // until the action queue drains and fresh game state is available.
     readonly HashSet<string> _invalidatedActions = new();
 
-    public ContextReturn GetContext(ContextInfo ctx)
+    public override ContextReturn GetContext(ContextInfo ctx)
     {
         if (!firstContext)
         {
@@ -192,10 +190,10 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         return new ContextReturn(stringBuilder.ToString().TrimEnd(), true);
     }
 
-    public CommandReturn GetCommands(ContextInfo ctx)
+    public override CommandReturn GetCommands(ContextInfo ctx)
     {
         // Clear invalidated actions when the action queue has drained and game state is fresh
-        if (actionQueue.Count == 0)
+        if (ActionQueue.Count == 0)
             _invalidatedActions.Clear();
 
         var commands = new List<ConstructedAction>();
@@ -277,12 +275,8 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
     }
 
 
-    public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
+    public override ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
-        if (!_isRevalidation)
-        {
-            NeuroIntegration.EndForce();
-        }
 
         var cm = CombatManager.Instance;
         if (cm == null) return ExecutionResult.Failure("Not in combat");
@@ -296,14 +290,14 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         if (action.Name.StartsWith("play_card"))
         {
             var result = ValidateSingleCard(action, data, ref parsedData, ctx);
-            if (result.Successful && !_isRevalidation)
+            if (result.Successful && !IsRevalidation)
                 InvalidateFutureActions(action, parsedData, player, ctx);
             return result;
         }
         else if (action.Name.StartsWith("use_potion"))
         {
             var result = ValidatePotion(action, data, ref parsedData, ctx);
-            if (result.Successful && !_isRevalidation)
+            if (result.Successful && !IsRevalidation)
                 InvalidateFutureActions(action, parsedData, player, ctx);
             return result;
         }
@@ -311,7 +305,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         {
             if (cm.IsPlayerReadyToEndTurn(player))
                 return ExecutionResult.Failure("Turn already ended");
-            if (!_isRevalidation)
+            if (!IsRevalidation)
                 NeuroIntegration.UnregisterAllActions();
             return ExecutionResult.Success();
         }
@@ -339,7 +333,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         bool canPayEnergyWithStars = combatState != null && Hook.ShouldPayExcessEnergyCostWithStars(combatState, player);
 
         // Reset projected state on new round or when the action queue has fully drained
-        if (currentRound != _lastProjectedRound || actionQueue.Count == 0)
+        if (currentRound != _lastProjectedRound || ActionQueue.Count == 0)
         {
             _projectedEnergyRemaining = pcs.Energy;
             _projectedStarsRemaining = pcs.Stars;
@@ -513,91 +507,58 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
         return ExecutionResult.Success();
 
     }
-    public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
+    protected override void OnQueuedActionReceived(ConstructedAction action, Result result, ContextInfo ctx)
     {
         firstContext = false;
+    }
 
-        // Wait for our turn in the queue
-        var queueResult = await actionQueue.GetExecution();
-        if (!queueResult.Successful)
+    protected override Result GetRevalidationResult(ConstructedAction action, Result result, ContextInfo freshCtx) => new();
+
+    protected override string GetQueueRejectedDiscardMessage(ConstructedAction action, Result result, ExecutionResult queueResult)
+        => $"- {DescribeAction(action, result)} was cancelled due to {queueResult.Message}";
+
+    protected override string GetContextChangedMessage(ConstructedAction action, Result result)
+        => "Context changed, no longer in combat";
+
+    protected override async Task<ExecutionResult?> ExecuteQueuedAction(ConstructedAction action, Result result, ContextInfo ctx)
+    {
+        if (action.Name.StartsWith("play_card"))
         {
-            Plugin.LogDebug($"ActionQueue: action '{action.Name}' was rejected or cancelled: {queueResult.Message}");
-            //TODO: figure out how to not send end_turn when it was the last action but was automatically already queued
-            actionQueue.AddToDiscardedActionText($"- {action.Name} was cancelled due to {queueResult.Message}");
-            if (actionQueue.Count == 0)
-                actionQueue.SendDiscardedActionText();
-            return queueResult;
+            return await PlayCard(result, ctx);
+        }
+        if (action.Name.StartsWith("use_potion"))
+        {
+            return UsePotion(result, ctx);
+        }
+        if (action.Name == "end_turn")
+        {
+            return await EndTurn(ctx);
+        }
+        return null;
+    }
+
+    protected override void OnAfterQueuedAction(ConstructedAction action, Result result, ContextInfo freshCtx)
+    {
+        if (action.Name == "end_turn")
+        {
+            return;
         }
 
-        // Revalidate with fresh game state — things may have changed while waiting
-        var freshCtx = GameContext.Resolve();
-        if (freshCtx == null || freshCtx.Type != ContextType.Combat)
+        var freshContext = GameContext.Resolve();
+        if (freshContext == null || freshContext.Type != ContextType.Combat)
         {
-            Plugin.LogDebug($"ActionQueue: context changed while waiting for '{action.Name}'");
-            actionQueue.ActionFinished();
-            return ExecutionResult.Failure("Context changed, no longer in combat");
+            Plugin.LogDebug($"Not sending context after '{action.Name}' because context changed");
+            return;
         }
 
-        var freshResult = new Result();
-        _isRevalidation = true;
-        var revalidation = Validate(action, action.Data, freshResult, freshCtx);
-        _isRevalidation = false;
-        if (!revalidation.Successful)
-        {
-            Plugin.LogDebug($"ActionQueue: action '{action.Name}' failed revalidation: {revalidation.Message}");
-            actionQueue.ActionFinished();
-            actionQueue.AddToDiscardedActionText($"- {action.Name} was cancelled due to {revalidation.Message}");
-            if (actionQueue.Count == 0)
-                actionQueue.SendDiscardedActionText();
-            return revalidation;
-        }
+        var context = getContext(freshCtx, afterPlayed: true);
+        NeuroIntegration.SendContext(context.Message, context.Silent);
 
-        actionQueue.MarkExecuting();
-
-        try
+        if (ActionQueue.Count <= 1)
         {
-            ExecutionResult? execResult;
-            if (action.Name.StartsWith("play_card"))
-            {
-                execResult = await PlayCard(freshResult, freshCtx);
-            }
-            else if (action.Name.StartsWith("use_potion"))
-            {
-                execResult = UsePotion(freshResult, freshCtx);
-            }
-            else if (action.Name == "end_turn")
-            {
-                execResult = await EndTurn(freshCtx);
-            }
-            else
-            {
-                execResult = null;
-            }
-            return execResult;
-        }
-        finally
-        {
-            if (action.Name != "end_turn") // Don't send a new context after ending the turn, we'll get a new one when the next combat round starts
-            {
-                var freshContext = GameContext.Resolve();
-                if (freshContext == null || freshContext.Type != ContextType.Combat)
-                {
-                    Plugin.LogDebug($"Not sending context after '{action.Name}' because context changed");
-                }
-                else
-                {
-                    var context = getContext(freshCtx, afterPlayed: true);
-                    NeuroIntegration.SendContext(context.Message, context.Silent);
-                }
-
-                if (actionQueue.Count <= 1 && freshContext?.Type == ContextType.Combat)
-                {
-                    var commandReturn = GetCommands(freshContext);
-                    if (!commandReturn.Commands.All(x => x.Name == "end_turn"))
-                        NeuroIntegration.Reforce(commandReturn.ForceText);
-                }
-            }
-            actionQueue.ActionFinished();
+            var commandReturn = GetCommands(freshContext);
+            if (!commandReturn.Commands.All(x => x.Name == "end_turn"))
+                NeuroIntegration.Reforce(commandReturn.ForceText);
         }
     }
 
@@ -627,7 +588,7 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
     private async Task<ExecutionResult> EndTurn(ContextInfo ctx)
     {
         // Ending the turn invalidates any remaining queued actions
-        actionQueue.Clear();
+        ActionQueue.Clear();
         NeuroIntegration.UnregisterAllActions();
 
         var pcs = LocalContext.GetMe(ctx.RunState.Players)?.PlayerCombatState;
@@ -727,7 +688,11 @@ public class CombatHandler : IContextHandler<CombatHandler.Result>, IOnContextSw
 
     public void OnContextSwitch(ContextType newContext)
     {
-        actionQueue.Clear();
+        ActionQueue.Clear();
         NeuroIntegration.UnregisterAllActions();
+        _invalidatedActions.Clear();
+        _projectedPotionsUsed.Clear();
+        ResetQueuedHandlerState();
+        firstContext = true;
     }
 }

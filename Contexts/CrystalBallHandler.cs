@@ -14,7 +14,7 @@ using STS2NeuroIntegration;
 
 namespace Sts2Agent.Contexts;
 
-public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
+public class CrystalBallHandler : AbstractQueuedHandler<CrystalBallHandler.Result>
 {
   public class Result : IContextResult
   {
@@ -22,9 +22,6 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     internal NCrystalSphereCell SelectedCell;
     internal NProceedButton ProceedButton;
   }
-
-  private ActionQueue _actionQueue = new();
-  private bool _isRevalidation;
 
   private Dictionary<Vector2I, bool> _revealedCells = new();
   private static readonly Vector2I[] CellDirections =
@@ -41,8 +38,8 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
 
   private bool _isBigSize = true;
 
-  public ContextType Type => ContextType.CrstalBallEvent;
-  public ContextReturn GetContext(ContextInfo ctx)
+  public override ContextType Type => ContextType.CrystalBallEvent;
+  public override ContextReturn GetContext(ContextInfo ctx)
   {
     StringBuilder stringBuilder = new();
     stringBuilder.AppendLine("You are at the Crystal Ball event.");
@@ -69,7 +66,7 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     return new ContextReturn(stringBuilder.ToString());
   }
 
-  public CommandReturn GetCommands(ContextInfo ctx)
+  public override CommandReturn GetCommands(ContextInfo ctx)
   {
     var commands = new List<ConstructedAction>();
     if (ctx.CrystalSphereScreen == null) return new CommandReturn();
@@ -133,7 +130,7 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     return stringBuilder.ToString();
   }
 
-  public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
+  public override ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
   {
     if (ctx.CrystalSphereScreen == null) return ExecutionResult.ModFailure("Couldn't find the event screen");
     if (action.Name.StartsWith("select_"))
@@ -161,11 +158,11 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
       {
         if ($"{cell.Entity.X}_{cell.Entity.Y}" != $"{data.Data["x"]}_{data.Data["y"]}") continue;
         if (!cell.Entity.IsHidden) return ExecutionResult.Failure($"Position ({data.Data["x"]}, {data.Data["y"]}) is already unlocked. Try a different position.");
-        if (!_isRevalidation && _revealedCells.TryGetValue(new(cell.Entity.X, cell.Entity.Y), out var isRevealed) && isRevealed)
+        if (!IsRevalidation && _revealedCells.TryGetValue(new(cell.Entity.X, cell.Entity.Y), out var isRevealed) && isRevealed)
         {
           return ExecutionResult.Failure($"Position ({data.Data["x"]}, {data.Data["y"]}) is already unlocked. Try a different position.");
         }
-        if (!_isRevalidation)
+        if (!IsRevalidation)
         {
           if (_isBigSize)
           {
@@ -200,83 +197,51 @@ public class CrystalBallHandler : IContextHandler<CrystalBallHandler.Result>
     }
     return ExecutionResult.Unstable("Unknown action");
   }
-  public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
+  protected override async Task<ExecutionResult?> ExecuteQueuedAction(ConstructedAction action, Result result, ContextInfo ctx)
   {
-    var queueResult = await _actionQueue.GetExecution();
-    if (!queueResult.Successful)
+    if (action.Name.StartsWith("select_"))
     {
-      Plugin.LogDebug($"ActionQueue: action '{action.Name}' was rejected or cancelled: {queueResult.Message}");
-      _actionQueue.AddToDiscardedActionText($"- couldn't {action.Name} due to {queueResult.Message}");
-      if (_actionQueue.Count == 0)
-        _actionQueue.SendDiscardedActionText();
-      return queueResult;
+      if (result.SelectedButton == null) return ExecutionResult.Unstable("Validation passed without a proper result");
+      await GodotMainThread.ClickAsync(result.SelectedButton);
+      _isBigSize = result.SelectedButton.Get(NDivinationButton.PropertyName._label).As<MegaLabel>()?.Text?.Contains("Big", StringComparison.InvariantCultureIgnoreCase) ?? _isBigSize;
+      return ExecutionResult.Success();
     }
-
-    var freshCtx = GameContext.Resolve();
-    if (freshCtx == null || freshCtx.Type != ContextType.CrstalBallEvent)
+    if (action.Name.StartsWith("reveal_"))
     {
-      Plugin.LogDebug($"ActionQueue: context changed while waiting for '{action.Name}'");
-      _actionQueue.ActionFinished();
-      return ExecutionResult.Failure("Context changed, no longer on the Crystal Ball event");
+      if (result.SelectedCell == null) return ExecutionResult.Unstable("Validation passed without a proper result");
+      await GodotMainThread.ClickAsync(result.SelectedCell);
+      NeuroIntegration.SendContext(result.SelectedCell.Entity.Item is null
+        ? "The revealed cell contained no item."
+        : $"The revealed cell contained part of a {(result.SelectedCell.Entity.Item.IsGood ? "good" : "bad")} item. Fully reveal it to claim it.");
+      await Task.Delay(500);
+      return ExecutionResult.Success();
     }
-
-    _isRevalidation = true;
-    var revalidation = Validate(action, action.Data, result, freshCtx);
-    _isRevalidation = false;
-    if (!revalidation.Successful)
+    if (action.Name == "proceed")
     {
-      Plugin.LogDebug($"ActionQueue: action '{action.Name}' failed revalidation: {revalidation.Message}");
-      _actionQueue.ActionFinished();
-      _actionQueue.AddToDiscardedActionText($"- {action.Name} was cancelled due to {revalidation.Message}");
-      if (_actionQueue.Count == 0)
-        _actionQueue.SendDiscardedActionText();
-      return revalidation;
-    }
-
-    _actionQueue.MarkExecuting();
-
-    try
-    {
-
-      if (action.Name.StartsWith("select_"))
-      {
-        if (result.SelectedButton == null) return ExecutionResult.Unstable("Validation passed without a proper result");
-        await GodotMainThread.ClickAsync(result.SelectedButton);
-        _isBigSize = result.SelectedButton.Get(NDivinationButton.PropertyName._label).As<MegaLabel>()?.Text?.Contains("Big", StringComparison.InvariantCultureIgnoreCase) ?? _isBigSize;
-        return ExecutionResult.Success();
-      }
-      if (action.Name.StartsWith("reveal_"))
-      {
-        if (result.SelectedCell == null) return ExecutionResult.Unstable("Validation passed without a proper result");
-        await GodotMainThread.ClickAsync(result.SelectedCell);
-        NeuroIntegration.SendContext(result.SelectedCell.Entity.Item is null
-          ? "The revealed cell contained no item."
-          : $"The revealed cell contained part of a {(result.SelectedCell.Entity.Item.IsGood ? "good" : "bad")} item. Fully reveal it to claim it.");
-        await Task.Delay(500);
-        return ExecutionResult.Success();
-      }
-      if (action.Name == "proceed")
-      {
-        if (result.ProceedButton == null) return ExecutionResult.Unstable("Validation passed without a proper result");
-        await GodotMainThread.ClickAsync(result.ProceedButton);
-        _revealedCells.Clear();
-        _actionQueue?.Clear();
-        return ExecutionResult.Success();
-      }
-    }
-    finally
-    {
-      if (action.Name is not "proceed" && _actionQueue.Count <= 1)
-      {
-        var currentCtx = GameContext.Resolve();
-        if (currentCtx?.Type == ContextType.CrstalBallEvent && currentCtx.CrystalSphereScreen != null)
-        {
-          NeuroIntegration.Reforce(getForceText(currentCtx));
-        }
-      }
-      _actionQueue.ActionFinished();
+      if (result.ProceedButton == null) return ExecutionResult.Unstable("Validation passed without a proper result");
+      await GodotMainThread.ClickAsync(result.ProceedButton);
+      _revealedCells.Clear();
+      ActionQueue.Clear();
+      return ExecutionResult.Success();
     }
     return ExecutionResult.Unstable("Unknown action");
+  }
+
+  protected override string GetContextChangedMessage(ConstructedAction action, Result result)
+    => "Context changed, no longer on the Crystal Ball event";
+
+  protected override void OnAfterQueuedAction(ConstructedAction action, Result result, ContextInfo freshCtx)
+  {
+    if (action.Name == "proceed" || ActionQueue.Count > 1)
+    {
+      return;
+    }
+
+    var currentCtx = GameContext.Resolve();
+    if (currentCtx?.Type == ContextType.CrystalBallEvent && currentCtx.CrystalSphereScreen != null)
+    {
+      NeuroIntegration.Reforce(getForceText(currentCtx));
+    }
   }
 
 }
