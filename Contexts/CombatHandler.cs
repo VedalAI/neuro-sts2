@@ -32,7 +32,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
     {
         internal Creature? Target;
         internal CardModel? Card;
-        internal PotionModel Potion;
+        internal PotionModel? Potion;
     }
     public override ContextType Type => ContextType.Combat;
     bool firstContext = true;
@@ -152,6 +152,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         stringBuilder.AppendLine();
         stringBuilder.AppendLine($"You currently have {pcs?.Hand.Cards.Count} cards in hand");
         stringBuilder.RepresentDeck(pcs.Hand.Cards, PileType.Hand);
+        var potionEntries = GetPotionEntries(player);
         var events = EventLog.DrainAll();
         if (events.Count > 0)
         {
@@ -177,14 +178,13 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         if (pcs.Hand.Cards.Count > 0 && pcs.Hand.Cards.Any(card => card.CanPlay()))
         {
             stringBuilder.AppendLine("");
-            stringBuilder.AppendLine("## Cards in hand");
-            stringBuilder.AppendLine("Use these indices when choosing a `play_card` action.");
-            for (int i = 0; i < pcs.Hand.Cards.Count; i++)
-            {
-                var card = pcs.Hand.Cards[i];
-                if (card.CanPlay())
-                    stringBuilder.AppendLine($"- `{i}`: {TextHelper.StripBBCode(card.Title)}");
-            }
+            AppendPlayableCardsSection(stringBuilder, player);
+        }
+
+        if (potionEntries.Count > 0)
+        {
+            stringBuilder.AppendLine();
+            AppendPotionSection(stringBuilder, potionEntries, includeDescription: true);
         }
 
         return new ContextReturn(stringBuilder.ToString().TrimEnd(), true);
@@ -203,6 +203,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         var player = LocalContext.GetMe(ctx.RunState.Players);
         var pcs = player.PlayerCombatState;
         if (pcs == null || (pcs != null && pcs.Phase != PlayerTurnPhase.Play)) return new CommandReturn();
+        var availablePotions = GetPotionEntries(player, excludeProjectedUsed: true);
 
         var prompt = new StringBuilder();
         prompt.AppendLine("# It's your turn");
@@ -218,6 +219,11 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         else
         {
             prompt.AppendLine(GetAvailableCardsActionText(player));
+        }
+        if (availablePotions.Count > 0)
+        {
+            prompt.AppendLine();
+            AppendPotionSection(prompt, availablePotions, includeDescription: false);
         }
 
 
@@ -257,7 +263,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
             schema.Required = ["card_index"];
             commands.Add(new("play_card", "Play a card, optionally supply enemy_index or ally_index to specify a target otherwise the first target will be chosen", schema));
         }
-        if (!_invalidatedActions.Contains("use_potion") && player.Potions.Any(potion => potion != null))
+        if (!_invalidatedActions.Contains("use_potion") && availablePotions.Count > 0)
         {
             var schema = QJS.WrapObject(new Dictionary<string, JsonSchema>()
             {
@@ -608,6 +614,8 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
 
     private ExecutionResult UsePotion(Result root, ContextInfo ctx)
     {
+        if (root.Potion == null)
+            return ExecutionResult.ModFailure("Couldn't find the potion even though it passed validation");
 
         Callable.From(() => root.Potion.EnqueueManualUse(root.Target)).CallDeferred();
         Plugin.Log($"Used potion");
@@ -635,12 +643,59 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         if (pcs.Hand.Cards.Count == 0) return "Your hand is empty";
         var text = new StringBuilder();
         text.AppendLine("You can play the following cards:");
-        for (int i = 0; i < pcs.Hand.Cards.Count; i++)
-        {
-            if (pcs.Hand.Cards[i].CanPlay())
-                text.AppendLine($"- `{i}`: {TextHelper.StripBBCode(pcs.Hand.Cards[i].Title)}");
-        }
+        AppendPlayableCards(text, pcs.Hand.Cards);
         return text.ToString();
+    }
+
+    private List<(int SlotIndex, PotionModel Potion)> GetPotionEntries(Player player, bool excludeProjectedUsed = false)
+    {
+        var entries = new List<(int SlotIndex, PotionModel Potion)>();
+        for (int slotIndex = 0; slotIndex < player.PotionSlots.Count; slotIndex++)
+        {
+            var potion = player.PotionSlots[slotIndex];
+            if (potion == null)
+                continue;
+            if (excludeProjectedUsed && _projectedPotionsUsed.Contains(potion))
+                continue;
+
+            entries.Add((slotIndex, potion));
+        }
+
+        return entries;
+    }
+
+    private static void AppendPlayableCardsSection(StringBuilder stringBuilder, Player player)
+    {
+        var pcs = player.PlayerCombatState;
+        if (pcs == null)
+            return;
+
+        stringBuilder.AppendLine("## Cards in hand");
+        stringBuilder.AppendLine("Use these indices when choosing a `play_card` action.");
+        AppendPlayableCards(stringBuilder, pcs.Hand.Cards);
+    }
+
+    private static void AppendPlayableCards(StringBuilder stringBuilder, IReadOnlyList<CardModel> cards)
+    {
+        for (int i = 0; i < cards.Count; i++)
+        {
+            if (cards[i].CanPlay())
+                stringBuilder.AppendLine($"- `{i}`: {TextHelper.StripBBCode(cards[i].Title)}");
+        }
+    }
+
+    private static void AppendPotionSection(StringBuilder stringBuilder, IReadOnlyList<(int SlotIndex, PotionModel Potion)> potionEntries, bool includeDescription)
+    {
+        stringBuilder.AppendLine("## Potions");
+        stringBuilder.AppendLine("Use these indices when choosing a `use_potion` action.");
+        foreach (var (slotIndex, potion) in potionEntries)
+        {
+            var line = $"- `{slotIndex}`: {TextHelper.SafeLocString(() => potion.Title)}";
+            if (includeDescription)
+                line += $" - {TextHelper.GetPotionDescription(potion).AsSingleLine()}";
+
+            stringBuilder.AppendLine(line);
+        }
     }
 
     private static void PrettyRenderEnemies(StringBuilder stringBuilder, IReadOnlyList<Creature> enemies, CombatState combatState)
