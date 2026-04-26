@@ -1,75 +1,66 @@
-# sts2-ai-mod
+# neuro-sts2
 
-A Slay the Spire 2 mod that exposes the game state and actions over a local HTTP API, enabling programmatic control of the game.
+A Slay the Spire 2 mod that integrates the game with Neuro SDK over websocket.
+
+## Overview
+
+The mod watches the current game context, registers the actions that are valid for that decision point, and sends context updates back to the connected controller. The controller answers with Neuro SDK `action` messages, which the mod validates and executes in-game.
+
+This repository no longer exposes the older local HTTP API. The current integration path is the websocket-based Neuro SDK flow implemented under `NeuroSdk/`.
 
 ## Features
 
-- **Full game state serialization** — player stats, combat details, map, events, shop, rewards, and more
-- **Action execution** — play cards, select map nodes, pick event options, buy items, and navigate every screen
-- **Decision point signaling** — long-poll endpoint that blocks until the game reaches a point requiring input
-- **Event logging** — tracks game events (damage, card plays, relics gained, etc.)
+- **Context-aware action registration** for combat, map movement, events, rewards, shops, rest sites, card selection, timelines, and more
+- **Decision-point signaling** driven by the stability detector so actions are only offered when the game is ready
+- **Queued action execution** with revalidation before execution to avoid stale UI actions
+- **Event logging and context narration** so the connected controller receives useful state updates between actions
+
+## Connection setup
+
+The websocket URL is discovered from the `NEURO_SDK_WS_URL` environment variable. The lookup checks process, user, and machine scopes in that order.
+
+Example:
+
+```bash
+export NEURO_SDK_WS_URL=ws://127.0.0.1:8000
+```
+
+When the game starts, the mod initializes `NeuroSdkSetup`, opens the websocket connection, registers available actions, and begins sending context / force messages to the connected controller.
 
 ## Installation
 
-1. Download `sts2agent.dll` and `sts2agent.pck` from the [latest release](https://github.com/wdong/sts2-ai-mod/releases)
-2. Copy both files to your STS2 mods folder:
-   ```
-   <Steam>/steamapps/common/Slay the Spire 2/mods/
-   ```
-3. Launch the game — the mod loads automatically
+1. Build the mod from this repository.
+2. Copy the produced `neuro-sts2.dll` and `neuro-sts2.json` into your Slay the Spire 2 `mods/` folder if your build step did not already copy them there.
+3. Set `NEURO_SDK_WS_URL` so the mod can reach the controller.
+4. Launch the game.
 
-## API
+## Supported contexts
 
-The mod starts an HTTP server on `http://localhost:57541`.
+The mod handles every major game screen:
 
-### Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/state` | Current game state snapshot |
-| `GET` | `/state/wait?timeout=<ms>` | Block until a decision point (default 30s, max 120s) |
-| `POST` | `/action` | Execute an action (JSON body with `type` + params) |
-| `GET` | `/map` | Full map data |
-| `GET` | `/log-level?level=<debug\|info\|error>` | Get or set log level |
-
-### Typical loop
-
-```
-GET  /state/wait        → receive state at decision point
-POST /action { ... }    → execute chosen action, receive updated state
-```
-
-See [API.md](API.md) for the full reference including all contexts, state schemas, and available commands.
-
-## Supported Contexts
-
-The mod handles every game screen:
-
-- **Main Menu** / **Character Select** — start, continue, or abandon runs
-- **Map** — navigate between nodes
-- **Combat** — play cards, use potions, end turn
-- **Events** — select options
-- **Rest Sites** — rest, smith, or other campfire options
-- **Shop** — browse and buy cards, relics, potions, and card removal
-- **Treasure** — claim relics
-- **Rewards** — collect gold, cards, potions, relics
-- **Card/Hand Selection** — pick cards from reward screens or discard/exhaust prompts
-- **Game Over** — advance through the summary screen
+- **Main Menu** / **Character Select**
+- **Map**
+- **Combat**
+- **Events**
+- **Rest Sites**
+- **Shop**
+- **Treasure**
+- **Rewards**
+- **Card / Hand Selection**
+- **Game Over**
+- **Timelines**
+- **Crystal Ball**
 
 ## Building from source
 
-Requires .NET 9.0 and a local STS2 installation (for `sts2.dll` reference).
+Requires .NET 9.0 and a local STS2 installation so `sts2.dll`, `GodotSharp.dll`, and `0Harmony.dll` can be resolved.
 
 ```bash
-dotnet build
+dotnet build --nologo
 ```
 
-Copy the output DLL to the STS2 mods folder.
-
-## Example Agent
-
-See [ClaudePlaysSTS2](https://github.com/ndwang/ClaudePlaysSTS2) for an example agent that uses this mod's API to play the game.
+The project is configured to copy the built DLL and `neuro-sts2.json` into the STS2 mods directory after a successful build.
 
 ## Logs
 
-The mod writes to `~/sts2agent.log`. Set the log level at runtime via the `/log-level` endpoint.
+The mod writes logs to `~/sts2agent.log`.
