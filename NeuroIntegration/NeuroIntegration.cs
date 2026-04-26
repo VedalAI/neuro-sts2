@@ -48,7 +48,7 @@ public class NeuroIntegration : Node
     Context.Send("You are playing Slay the Spire 2");
   }
 
-  public void Processs()
+  public void Process()
   {
 
   }
@@ -92,7 +92,6 @@ public class NeuroIntegration : Node
     }
     if (Instance.GlobalActions.Count == 0)
     {
-      // Plugin.LogDebug("No Global Actions to Unregister");
       return;
     }
     NeuroActionHandler.UnregisterActions(Instance.GlobalActions.ToArray());
@@ -218,7 +217,7 @@ public class NeuroIntegration : Node
         GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
         return;
       }
-      Plugin.LogDebug($"Commands list contains {CommandsList.Commands.Count} commands. Is a Persistant CommandReturn: {CommandsList.Persistant}");
+      Plugin.LogDebug($"Commands list contains {CommandsList.Commands.Count} commands. Is a Persistent CommandReturn: {CommandsList.Persistent}");
       if (CommandsList.Commands.Count == 1 && !CommandsList.Commands[0].HasSchema())
       {
         ActionExecutor.EnqueueAction(CommandsList.Commands[0]);
@@ -228,12 +227,12 @@ public class NeuroIntegration : Node
         UnregisterAllActions();
         return;
       }
-      if (!CommandsList.Persistant)
+      if (!CommandsList.Persistent)
         lastWindow = ActionWindow.Create(this, ctx).SetContext(contextReturn.Message, contextReturn.Silent);
       var new_global_actions = new List<ConstructedAction>();
       foreach (var item in CommandsList.Commands)
       {
-        if (!CommandsList.Persistant)
+        if (!CommandsList.Persistent)
         {
           lastWindow!.AddAction(item);
         }
@@ -259,7 +258,7 @@ public class NeuroIntegration : Node
       }
       if (new_global_actions.Count > 0)
         NeuroActionHandler.RegisterActions(new_global_actions);
-      if (!CommandsList.Persistant)
+      if (!CommandsList.Persistent)
       {
         lastWindow!.SetForce(0, CommandsList.ForceText, null);
         lastWindow!.Register();

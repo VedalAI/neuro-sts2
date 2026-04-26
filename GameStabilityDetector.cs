@@ -84,8 +84,8 @@ public static class GameStabilityDetector
 
     /// <summary>
     /// Reset _wasStable so the next CheckStability that finds stable=true
-    /// will fire OnBecameStable.  Called by HttpServer after it resets its
-    /// signal events and before it schedules a post-action stability check.
+    /// will fire OnBecameStable. Called after action execution paths reset
+    /// their decision-point state and before a post-action stability check.
     /// </summary>
     public static void ResetWasStable()
     {
@@ -133,7 +133,6 @@ public static class GameStabilityDetector
         {
             _wasStable = true;
             Plugin.Log("=== GAME STABLE ===");
-            // Plugin.LogDebug(GameStateSerializer.Serialize().ToString());
             OnBecameStable?.Invoke();
         }
         else if (stable && _wasStable)
@@ -212,7 +211,7 @@ public static class GameStabilityDetector
 
             case ContextType.BundleSelection:
             case ContextType.CardSelection:
-            case ContextType.CrstalBallEvent:
+            case ContextType.CrystalBallEvent:
             case ContextType.Rewards:
                 Plugin.LogDebug($"IsStable: overlay {ctx.Type} → true");
                 return true;

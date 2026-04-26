@@ -81,7 +81,7 @@ public static class TextHelper
         return BbCodeRegex.Replace(text, "").Replace("\n", " ").Trim();
     }
 
-    public static string GetUnformatedText(this LocString locString)
+    public static string GetUnformattedText(this LocString locString)
     {
         return StripBBCode(locString.GetFormattedText());
     }

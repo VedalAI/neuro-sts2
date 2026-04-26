@@ -40,7 +40,7 @@ namespace NeuroSdk
                     break;
 
                 case (int)Node.NotificationInternalProcess:
-                    NeuroIntegration.Instance?.Processs();
+                    NeuroIntegration.Instance?.Process();
                     Process?.Invoke(); // Call Process on Action Windows
                     NeuroSdkSetup.WebsocketInstance?.Loop();
                     break;
