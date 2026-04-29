@@ -609,6 +609,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
 
         Plugin.Log("Ended turn");
         firstContext = true;
+        await Task.Delay(500); // Small delay to make it a better viewing experience
         return ExecutionResult.Success("Turn ended");
     }
 
