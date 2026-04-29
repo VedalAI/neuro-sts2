@@ -15,6 +15,7 @@ using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.RestSite;
 using MegaCrit.Sts2.Core.Context;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
 
 namespace Sts2Agent;
 
@@ -170,6 +171,7 @@ public static class GameStabilityDetector
 
     public static bool IsStable()
     {
+        Plugin.LogDebug("Checking game stability...");
         var ctx = GameContext.Resolve();
         if (ctx == null)
         {
@@ -180,6 +182,12 @@ public static class GameStabilityDetector
         if (ActionExecutor.HasRunningActions())
         {
             Plugin.LogDebug("IsStable: integration action still running → false");
+            return false;
+        }
+
+        if (!IsMultiplayerStable(ctx))
+        {
+            Plugin.LogDebug("IsStable: multiplayer state not stable → false");
             return false;
         }
 
@@ -315,6 +323,46 @@ public static class GameStabilityDetector
                 }
             default:
                 return false;
+        }
+    }
+
+    private static bool IsMultiplayerStable(ContextInfo ctx)
+    {
+        Plugin.LogDebug("Checking multiplayer stability...");
+        if (RunManager.Instance == null)
+        {
+            Plugin.LogDebug("IsMultiplayerStable: RunManager instance is null → true (not in a run)");
+            return true;
+        }
+        if (RunManager.Instance.NetService == null)
+        {
+            Plugin.LogDebug("IsMultiplayerStable: NetService is null → true (not in a run)");
+            return true;
+        }
+        if (!RunManager.Instance.NetService.Type.IsMultiplayer()) return true;
+        Plugin.LogDebug("IsMultiplayerStable: multiplayer run detected");
+
+        switch (ctx.Type)
+        {
+            case ContextType.Combat:
+                var player = LocalContext.GetMe(ctx.RunState.Players);
+                if (player == null)
+                {
+                    Plugin.LogDebug("IsMultiplayerStable: local player not found → false");
+                    return false;
+                }
+                var pcs = player?.PlayerCombatState;
+                if (pcs == null)
+                {
+                    Plugin.LogDebug("IsMultiplayerStable: player combat state is null → false");
+                    return false;
+                }
+                var stable = pcs.Phase == PlayerTurnPhase.Play || pcs.Phase == PlayerTurnPhase.Start;
+                Plugin.LogDebug($"IsMultiplayerStable: combat phase={pcs.Phase} → {stable}");
+                if (!stable) return false;
+                return true;
+            default:
+                return true;
         }
     }
 
