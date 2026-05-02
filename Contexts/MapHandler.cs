@@ -46,11 +46,20 @@ public class MapHandler : IContextHandler<MapHandler.Result>
 
         commands.Add(new("select_map_node", "Select a point to travel to", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
-            ["coord"] = QJS.Enum(ctx.AvailableMapNodes.Select((node) => $"{node.coord.row},{node.coord.col}"))
+            ["coordIndex"] = QJS.Type(JsonSchemaType.Integer)
         })));
+        StringBuilder forceText = new();
+        forceText.AppendLine("Please select a map node to travel to. use this index to choose the location you want to travel to:");
+        int index = 0;
+        foreach (var item in ctx.AvailableMapNodes)
+        {
+            var name = GetMapPointName(item.PointType);
+            forceText.AppendLine($"- '{index}': {name} ({item.coord.row},{item.coord.col})");
+            index++;
+        }
 
 
-        return new CommandReturn(commands);
+        return new CommandReturn(commands, ForceText: forceText.ToString());
     }
 
 
@@ -60,18 +69,17 @@ public class MapHandler : IContextHandler<MapHandler.Result>
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
             return ExecutionResult.Failure("Cannot access scene tree");
-        if (data.Data?["coord"]?.GetValue<string>() is not string index)
+        if (data.Data?["coordIndex"]?.GetValue<int>() is not int index)
         {
-            return ExecutionResult.Failure("Missing parameter: coord");
+            return ExecutionResult.Failure("Missing parameter: coordIndex");
         }
-        var coord = index.Split(",");
-        if (coord.Length <= 0 || coord.Length > 2)
+        if (index < 0 || index >= ctx.AvailableMapNodes.Count)
         {
-            return ExecutionResult.Failure("The coord parameter is malformed");
+            return ExecutionResult.Failure("The coordIndex parameter is out of range");
         }
         try
         {
-            var target = ctx.AvailableMapNodes.Find((x) => x.coord.row == int.Parse(coord[0]) && x.coord.col == int.Parse(coord[1]));
+            var target = ctx.AvailableMapNodes[index];
             if (target == null)
             {
                 return ExecutionResult.Failure("Couldn't find the specified node");
