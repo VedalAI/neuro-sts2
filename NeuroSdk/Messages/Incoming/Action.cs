@@ -54,9 +54,9 @@ namespace NeuroSdk.Messages.Incoming
                 {
                     if (NeuroActionHandler.IsRecentlyUnregistered(name))
                     {
-                        return ExecutionResult.Failure(NeuroSdkStrings.ActionFailedUnregistered);
+                        return ExecutionResult.Unstable(NeuroSdkStrings.ActionFailedUnregistered);
                     }
-                    return ExecutionResult.Failure(NeuroSdkStrings.ActionFailedUnknownAction.Format(name));
+                    return ExecutionResult.Unstable(NeuroSdkStrings.ActionFailedUnknownAction.Format(name));
                 }
                 parsedData.Action = registeredAction;
 

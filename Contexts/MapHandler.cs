@@ -14,6 +14,7 @@ using NeuroSdk.Actions;
 using System.Text;
 using NeuroSdk.Json;
 using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Context;
 
 namespace Sts2Agent.Contexts;
 
@@ -42,6 +43,14 @@ public class MapHandler : IContextHandler<MapHandler.Result>
     public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
+        if (Plugin.IsMultiplayer())
+        {
+            var ms = NMapScreen.Instance;
+            var player = LocalContext.GetMe(ctx.RunState.Players);
+            if (ms == null || player == null || (ms.PlayerVoteDictionary.TryGetValue(player, out var vote) && vote != null))
+                return new CommandReturn();
+        }
+
         if (ctx.AvailableMapNodes == null) return new CommandReturn();
 
         commands.Add(new("select_map_node", "Select a point to travel to", QJS.WrapObject(new Dictionary<string, JsonSchema>
@@ -102,14 +111,19 @@ public class MapHandler : IContextHandler<MapHandler.Result>
     }
     public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
     {
+        await Task.Delay(100);
         await GodotMainThread.ClickAsync(result.Target);
-        // Wait for travel to start (IsTravelEnabled becomes false) or map to close
-        for (int i = 0; i < 100; i++)
+        // Skip waiting in Multiplayer as we need to wait for all votes anyway
+        if (!Plugin.IsMultiplayer())
         {
-            await Task.Delay(100);
-            var ms = NMapScreen.Instance;
-            if (ms == null || !ms.IsOpen || !ms.IsTravelEnabled)
-                break;
+            // Wait for travel to start (IsTravelEnabled becomes false) or map to close
+            for (int i = 0; i < 100; i++)
+            {
+                var ms = NMapScreen.Instance;
+                if (ms == null || !ms.IsOpen || !ms.IsTravelEnabled)
+                    break;
+                await Task.Delay(100);
+            }
         }
         return ExecutionResult.Success("Map node selected");
     }

@@ -50,11 +50,7 @@ public static class ActionExecutor
                 if (result.IsUnstable)
                 {
                     Plugin.LogError("Stable situation but Action Window has Stale Actions, resetting");
-                    action.ActionWindow?.End();
-                    NeuroIntegration.EndForce();
-                    GameStabilityDetector.ResetWasStable();
-                    NeuroIntegration.UnregisterAllActions();
-                    GameStabilityDetector.ScheduleStabilityCheck();
+                    NeuroIntegration.Unstable();
                 }
                 Plugin.LogDebug($"Validation Result for action: {action.Name} is {result.Successful} with message: {result.Message}");
                 return result;

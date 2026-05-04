@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Modding;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Runs;
 using NeuroSdk;
 using NeuroSdk.Messages.Outgoing;
@@ -63,6 +64,8 @@ public static class Plugin
         }
     }
 
+    public static bool IsMultiplayer() => RunManager.Instance?.NetService?.Type.IsMultiplayer() ?? false;
+
     public static void Log(string message) => Log(LogLevel.Info, message);
     public static void LogDebug(string message) => Log(LogLevel.Debug, message);
     public static void LogError(string message) => Log(LogLevel.Error, message);
@@ -80,6 +83,10 @@ public static class Plugin
                 LogLevel.Warning => "WARNING",
                 _ => "INFO"
             };
+            if (RunManager.Instance?.NetService?.Type.IsMultiplayer() ?? false)
+            {
+                message = $"[NetId: {RunManager.Instance.NetService.NetId}] " + message;
+            }
             var line = $"[{DateTime.Now:HH:mm:ss.fff}] [{prefix}] {message}\n";
             File.AppendAllText(LogPath, line, new UTF8Encoding(true));
         }

@@ -8,6 +8,7 @@ using Godot;
 using NeuroSdk.Internal;
 using NeuroSdk.Messages.API;
 using Sts2Agent;
+using STS2NeuroIntegration;
 
 namespace NeuroSdk.Websocket
 {
@@ -54,6 +55,8 @@ namespace NeuroSdk.Websocket
                 {
                     Plugin.LogWarning("Received unsuccessful execution result when handling a message");
                     Plugin.LogWarning(validationResult.Message);
+                    if (validationResult.IsUnstable)
+                        NeuroIntegration.Unstable();
                     // Plugin.LogWarning(StackTraceUtility.ExtractStackTrace());
                 }
 

@@ -140,8 +140,6 @@ public class NeuroIntegration : Node
   ContextType lastContext = ContextType.Unknown;
   public static Action OnContextSwitch;
 
-  public int StabilityCheckCounter = 0;
-
   public void HandleDecisionPoint()
   {
 
@@ -168,6 +166,7 @@ public class NeuroIntegration : Node
         Plugin.LogDebug($"Context Switch: Called OnContextSwitch for {lastContext} -> {ctx.Type}");
       }
       UnregisterAllActions();
+      lastWindow?.End();
       lastContext = ctx.Type;
     }
 
@@ -193,21 +192,11 @@ public class NeuroIntegration : Node
     }
     if (lastWindow?.CurrentState == ActionWindow.State.Forced && lastWindow.IsSameContextInfo(ctx))
     {
-      StabilityCheckCounter++;
-      if (StabilityCheckCounter >= 20)
-      {
-        Plugin.LogWarning("Forced Action Window has been open for 20 decision points, closing to prevent softlock");
-        lastWindow?.End();
-        GameStabilityDetector.ResetWasStable();
-        GameStabilityDetector.ScheduleStabilityCheck();
-      }
       return;
     }
-    StabilityCheckCounter = 0;
     if (handler.GetCommands(ctx) is CommandReturn CommandsList)
     {
       var contextReturn = handler.GetContext(ctx);
-      lastWindow?.End();
       if (CommandsList.Commands.Count == 0)
       {
         if (!string.IsNullOrEmpty(contextReturn.Message))
@@ -228,7 +217,10 @@ public class NeuroIntegration : Node
         return;
       }
       if (!CommandsList.Persistent)
+      {
+        lastWindow?.End();
         lastWindow = ActionWindow.Create(this, ctx).SetContext(contextReturn.Message, contextReturn.Silent);
+      }
       var new_global_actions = new List<ConstructedAction>();
       foreach (var item in CommandsList.Commands)
       {
@@ -260,8 +252,10 @@ public class NeuroIntegration : Node
         NeuroActionHandler.RegisterActions(new_global_actions);
       if (!CommandsList.Persistent)
       {
+        UnregisterAllActions();
         lastWindow!.SetForce(0, CommandsList.ForceText, null);
         lastWindow!.Register();
+        Plugin.LogDebug("Forcing new Action Window with commands: " + string.Join(", ", CommandsList.Commands.Select(c => c.Name)));
       }
       else
       {
@@ -272,6 +266,7 @@ public class NeuroIntegration : Node
           var force = new ActionsForce(CommandsList.ForceText, null, false, ActionsForce.Priority.Low, GlobalActions);
           if (!string.IsNullOrEmpty(contextReturn.Message))
             SendContext(contextReturn.Message, contextReturn.Silent);
+          lastWindow?.End();
           WebsocketConnection.Instance!.Send(force);
           is_forcing = true;
         }
@@ -300,4 +295,14 @@ public class NeuroIntegration : Node
     Instance.HandleDecisionPoint();
   }
 
+  public static void Unstable()
+  {
+    Plugin.LogWarning("Game was Unstable! Trying to recover...");
+    Instance?.lastWindow?.End();
+    EndForce();
+    UnregisterAllActions();
+    GameStabilityDetector.ResetWasStable();
+    GameStabilityDetector.ScheduleStabilityCheck();
+
+  }
 }

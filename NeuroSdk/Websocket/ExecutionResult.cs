@@ -21,7 +21,7 @@ namespace NeuroSdk.Websocket
         /// use this when Something went wrong on our side. And having neuro retry wouldn't help
         ///<summary>
         public static ExecutionResult Unstable(string reason) => new(false, reason, true);
-        public static ExecutionResult VedalFailure(string reason) => Failure(reason + NeuroSdkStrings.VedalFaultSuffix);
+        public static ExecutionResult VedalFailure(string reason) => Unstable(reason + NeuroSdkStrings.VedalFaultSuffix);
         public static ExecutionResult ModFailure(string reason) => Unstable(reason + NeuroSdkStrings.ModFaultSuffix);
     }
 }
