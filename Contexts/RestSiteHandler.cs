@@ -13,6 +13,7 @@ using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 using System.Text;
+using MegaCrit.Sts2.Core.Context;
 
 namespace Sts2Agent.Contexts;
 
@@ -29,6 +30,10 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
     {
         StringBuilder stringBuilder = new();
         stringBuilder.AppendLine("You are at a rest site. You can choose only one action here. The others will be locked for this rest site.");
+
+        var player = LocalContext.GetMe(ctx.RunState.Players);
+        if (player != null)
+            stringBuilder.AppendLine($"# You currently have {player.Creature.CurrentHp} HP out of {player.Creature.MaxHp} max HP and {player.Creature.Block} Block");
         return new ContextReturn(stringBuilder.ToString());
     }
     public CommandReturn GetCommands(ContextInfo ctx)
