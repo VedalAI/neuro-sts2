@@ -217,6 +217,7 @@ public class RewardsHandler : AbstractQueuedHandler<RewardsHandler.Result>, IOnC
         // Try proceed button on rewards overlay first
         ActionQueue.Clear();
         _reservedRewardButtonIds.Clear();
+        NeuroIntegration.UnregisterAllActions();
         await GodotMainThread.ClickAsync(result.Button);
         await Task.Delay(500); // Wait for the next room to load
         Plugin.Log("Clicked proceed on rewards");
