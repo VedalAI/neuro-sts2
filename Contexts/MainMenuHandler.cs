@@ -233,6 +233,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
         {
             await GodotMainThread.ClickAsync(result.Button);
             await Task.Delay(500);
+            NeuroIntegration.Unstable();
             return ExecutionResult.Success("Opened the timeline");
         }
 
