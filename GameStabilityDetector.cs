@@ -326,6 +326,7 @@ public static class GameStabilityDetector
         }
     }
 
+    //TODO: Event also seems to return stable even without options. Maybe stability check happens for every user connected? instead of just the local player?
     private static bool IsMultiplayerStable(ContextInfo ctx)
     {
         Plugin.LogDebug("Checking multiplayer stability...");
@@ -345,22 +346,60 @@ public static class GameStabilityDetector
         switch (ctx.Type)
         {
             case ContextType.Combat:
-                var player = LocalContext.GetMe(ctx.RunState.Players);
-                if (player == null)
                 {
-                    Plugin.LogDebug("IsMultiplayerStable: local player not found → false");
+                    var player = LocalContext.GetMe(ctx.RunState.Players);
+                    if (player == null)
+                    {
+                        Plugin.LogDebug("IsMultiplayerStable: local player not found → false");
+                        return false;
+                    }
+                    var pcs = player?.PlayerCombatState;
+                    if (pcs == null)
+                    {
+                        Plugin.LogDebug("IsMultiplayerStable: player combat state is null → false");
+                        return false;
+                    }
+                    var combatManager = CombatManager.Instance;
+                    if (combatManager == null)
+                    {
+                        Plugin.LogDebug("IsMultiplayerStable: combat manager instance is null → false");
+                        return false;
+                    }
+                    var stable = (pcs.Phase == PlayerTurnPhase.Play || pcs.Phase == PlayerTurnPhase.Start) && !combatManager.IsPlayerReadyToEndTurn(player);
+                    Plugin.LogDebug($"IsMultiplayerStable: combat phase={pcs.Phase} → {stable}");
+                    if (!stable) return false;
+                    return true;
+                }
+            case ContextType.Map:
+                {
+                    var ms = NMapScreen.Instance;
+                    var player = LocalContext.GetMe(ctx.RunState.Players);
+                    if (player == null)
+                    {
+                        Plugin.LogDebug("IsMultiplayerStable: local player not found → false");
+                        return false;
+                    }
+                    if (ms is { IsTravelEnabled: true, IsOpen: true })
+                    {
+                        if (ms.PlayerVoteDictionary.TryGetValue(player, out var vote) && vote != null)
+                        {
+                            Plugin.LogDebug($"IsMultiplayerStable: player vote={vote} → false (waiting for all votes)");
+                            return false;
+                        }
+                        Plugin.LogDebug("IsMultiplayerStable: map screen, travel enabled → true");
+                        return true;
+                    }
+                    // Map is open but not interactive — if travel finished, close it
+                    // so the room underneath becomes visible to viewers and agent
+                    if (ms is { IsTraveling: false })
+                    {
+                        Plugin.Log("Map overlay stuck open after travel — closing");
+                        ms.Close();
+                    }
+                    if (ms != null)
+                        Plugin.LogDebug($"IsMultiplayerStable: map screen, travel not enabled (traveling={ms?.IsTraveling}) → false");
                     return false;
                 }
-                var pcs = player?.PlayerCombatState;
-                if (pcs == null)
-                {
-                    Plugin.LogDebug("IsMultiplayerStable: player combat state is null → false");
-                    return false;
-                }
-                var stable = pcs.Phase == PlayerTurnPhase.Play || pcs.Phase == PlayerTurnPhase.Start;
-                Plugin.LogDebug($"IsMultiplayerStable: combat phase={pcs.Phase} → {stable}");
-                if (!stable) return false;
-                return true;
             default:
                 return true;
         }

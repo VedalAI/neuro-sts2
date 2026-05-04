@@ -283,6 +283,7 @@ namespace NeuroSdk.Actions
         {
             NGamePatch.Process -= Process;
             if (CurrentState >= State.Ended) return;
+            Plugin.LogDebug("Ending ActionWindow and unregistering actions.");
 
             NeuroActionHandler.UnregisterActions(_actions);
             _shouldForceFunc = null;
