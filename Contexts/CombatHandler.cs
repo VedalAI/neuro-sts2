@@ -465,7 +465,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         if (hand == null || hand.Count <= 0)
             return ExecutionResult.Failure("The hand is not valid");
         if (cardIndex >= hand.Count)
-            return ExecutionResult.Failure($"Card index {cardIndex} out of range for hand size {hand.Count}");
+            return ExecutionResult.Failure($"Card index {cardIndex} out of range for hand size {hand.Count}. Please choose a different card from: {GetAvailableCardsActionText(player)}");
         var card = hand[cardIndex];
         if (card == null || !card.CanPlay())
         {
@@ -609,7 +609,10 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
 
         Plugin.Log("Ended turn");
         firstContext = true;
-        await Task.Delay(500); // Small delay to make it a better viewing experience
+        await Task.Delay(200); // Small delay to make it a better viewing experience
+        ActionQueue.Clear();
+        NeuroIntegration.UnregisterAllActions();
+
         return ExecutionResult.Success("Turn ended");
     }
 
