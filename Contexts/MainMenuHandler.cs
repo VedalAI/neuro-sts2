@@ -231,9 +231,14 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
         }
         if (action.Name == "view_timeline")
         {
+            NeuroIntegration.Unstable();
             await GodotMainThread.ClickAsync(result.Button);
+            NeuroIntegration.Unstable();
             await Task.Delay(500);
             NeuroIntegration.Unstable();
+            await Task.Delay(500);
+            NeuroIntegration.Unstable();
+
             return ExecutionResult.Success("Opened the timeline");
         }
 
