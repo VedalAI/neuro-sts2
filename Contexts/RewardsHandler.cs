@@ -131,7 +131,7 @@ public class RewardsHandler : AbstractQueuedHandler<RewardsHandler.Result>, IOnC
             var rewardEntries = GetRewardEntries(rewardsScreen);
             if (rewardIndex >= rewardEntries.Count)
             {
-                return ExecutionResult.Failure($"Reward index {rewardIndex} out of range (remaining rewards: {rewardEntries.Count})");
+                return ExecutionResult.Failure($"Reward index {rewardIndex} out of range (remaining rewards: {rewardEntries.Count}), Please select one of these rewards: {string.Join(", ", rewardEntries.Select(e => $"'{e.Index}' {e.DisplayLabel}"))}");
             }
 
             var rewardEntry = rewardEntries[rewardIndex];
@@ -240,7 +240,7 @@ public class RewardsHandler : AbstractQueuedHandler<RewardsHandler.Result>, IOnC
             forceText.AppendLine("Available rewards:");
             foreach (var rewardEntry in rewardEntries)
             {
-                forceText.AppendLine($"- [{rewardEntry.Index}] {rewardEntry.DisplayLabel}: {rewardEntry.Description}");
+                forceText.AppendLine($"- '{rewardEntry.Index}' {rewardEntry.DisplayLabel}: {rewardEntry.Description}");
             }
             return;
         }
