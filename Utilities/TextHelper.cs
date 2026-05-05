@@ -228,21 +228,21 @@ public static class TextHelper
         return "";
     }
 
-    public static void AppendPlayableCards(StringBuilder stringBuilder, IReadOnlyList<CardModel> cards)
+    public static void AppendPlayableCards(StringBuilder stringBuilder, IReadOnlyList<CardModel> cards, bool allHandCards = true)
     {
         for (int i = 0; i < cards.Count; i++)
         {
-            if (cards[i].CanPlay())
-                stringBuilder.AppendLine($"- `{i}`: {TextHelper.StripBBCode(cards[i].Title)}");
+            if (allHandCards || cards[i].CanPlay())
+                stringBuilder.AppendLine($"- `{i}`: {StripBBCode(cards[i].Title)}");
         }
     }
-    public static string GetAvailableCardsActionText(Player player)
+    public static string GetAvailableCardsActionText(Player player, bool allHandCards = false)
     {
         var pcs = player.PlayerCombatState;
         if (pcs == null) return "No player combat state";
         if (pcs.Hand.Cards.Count == 0) return "Your hand is empty";
         var text = new StringBuilder();
-        AppendPlayableCards(text, pcs.Hand.Cards);
+        AppendPlayableCards(text, pcs.Hand.Cards, allHandCards);
         return text.ToString();
     }
 }
