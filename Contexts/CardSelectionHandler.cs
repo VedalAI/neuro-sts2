@@ -130,7 +130,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
                 return ExecutionResult.Failure("No cards are available to select");
 
             if (cardIndex < 0 || cardIndex >= holders.Count)
-                return ExecutionResult.Failure($"Card index {cardIndex} out of range (available: {holders.Count}), Available cards to select are: {TextHelper.GetAvailableCardsActionText(LocalContext.GetMe(ctx.RunState.Players))}");
+                return ExecutionResult.Failure($"Card index {cardIndex} out of range (available: {holders.Count}), Available cards to select are: {TextHelper.GetAvailableCardsActionText(LocalContext.GetMe(ctx.RunState.Players), true)}");
 
             var holder = holders[cardIndex];
             if (holder == null)
@@ -158,7 +158,7 @@ public class CardSelectionHandler : IContextHandler<CardSelectionHandler.Result>
             {
                 var cardName = item;
                 if (cardName < 0 || cardName >= holders.Count)
-                    return ExecutionResult.Failure($"Card index {cardName} out of range (available: {holders.Count}). Available cards to select are: {TextHelper.GetAvailableCardsActionText(LocalContext.GetMe(ctx.RunState.Players))}");
+                    return ExecutionResult.Failure($"Card index {cardName} out of range (available: {holders.Count}). Available cards to select are: {TextHelper.GetAvailableCardsActionText(LocalContext.GetMe(ctx.RunState.Players), true)}");
                 var holder = holders[cardName];
                 if (holder == null)
                 {

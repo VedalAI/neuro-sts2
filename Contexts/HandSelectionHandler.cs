@@ -52,7 +52,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
             stringBuilder.AppendLine("**Selectable cards:**");
             var player = LocalContext.GetMe(ctx.RunState!.Players);
             if (player != null)
-                stringBuilder.AppendLine(TextHelper.GetAvailableCardsActionText(player));
+                stringBuilder.AppendLine(TextHelper.GetAvailableCardsActionText(player, true));
         }
         return new ContextReturn(stringBuilder.ToString());
 
@@ -107,7 +107,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
         forceText.AppendLine("Select cards from your hand:");
         var player = LocalContext.GetMe(ctx.RunState!.Players);
         if (player != null)
-            forceText.AppendLine(TextHelper.GetAvailableCardsActionText(player));
+            forceText.AppendLine(TextHelper.GetAvailableCardsActionText(player, true));
 
         return new CommandReturn(commands, ForceText: forceText.ToString());
     }
@@ -135,7 +135,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
             foreach (var index in cardIndex)
             {
                 if (index < 0 || index >= holders.Count)
-                    return ExecutionResult.Failure($"Card index {index} out of range (available: {holders.Count}), Available cards: {TextHelper.GetAvailableCardsActionText(LocalContext.GetMe(ctx.RunState!.Players))}");
+                    return ExecutionResult.Failure($"Card index {index} out of range (available: {holders.Count}), Available cards: {TextHelper.GetAvailableCardsActionText(LocalContext.GetMe(ctx.RunState!.Players), true)}");
                 held_cards.Add(holders[index]);
 
             }
