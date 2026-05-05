@@ -54,7 +54,8 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
         if (nRestSiteRoom?.ProceedButton?.IsEnabled == true)
             commands.Add(new("proceed", "Proceed from the rest site. Any remaining options will be ignored."));
 
-        return new CommandReturn(commands);
+
+        return new CommandReturn(commands, ForceText: "Please choose an Available Rest Site Option, You can only choose one. The others will be disabled once you select something.");
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)

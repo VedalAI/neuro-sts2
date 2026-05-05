@@ -66,11 +66,12 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
             eventBuilder.AppendLine();
             eventBuilder.AppendLine("**Options:**");
         }
-        foreach (var eventoption in evt.CurrentOptions)
+        for (int i = 0; i < evt.CurrentOptions.Count; i++)
         {
+            MegaCrit.Sts2.Core.Events.EventOption? eventoption = evt.CurrentOptions[i];
             string optionTitle = TextHelper.SafeLocString(() => eventoption.Title);
             string optionState = eventoption.IsLocked ? "(Locked)" : "";
-            eventBuilder.Append($"- **{optionTitle}** {optionState}: ");
+            eventBuilder.Append($"- '{i}': **{optionTitle}** {optionState}");
 
             try
             {
@@ -123,8 +124,17 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
                 ["option_index"] = QJS.Type(JsonSchemaType.Integer)
             })));
         }
+        StringBuilder forceText = new();
+        forceText.AppendLine("Select an event option:");
 
-        return new CommandReturn(commands);
+        for (int i = 0; i < evt.CurrentOptions.Count; i++)
+        {
+            MegaCrit.Sts2.Core.Events.EventOption? eventoption = evt.CurrentOptions[i];
+            string optionTitle = TextHelper.SafeLocString(() => eventoption.Title);
+            string optionState = eventoption.IsLocked ? "(Locked)" : "";
+            forceText.Append($"- '{i}': **{optionTitle}** {optionState}");
+        }
+        return new CommandReturn(commands, ForceText: forceText.ToString());
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)

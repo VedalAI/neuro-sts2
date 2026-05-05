@@ -35,8 +35,28 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
         stringBuilder.AppendLine("# Select a character and embark on your adventure to conquer the Spire!");
         stringBuilder.AppendLine($"# Currently selected character: {TextHelper.StripBBCode(first_character.Character.Title.GetFormattedText())}");
         stringBuilder.RepresentStartingCharacter(first_character.Character);
+        stringBuilder.AppendLine();
+        stringBuilder.AppendLine(GetForceText(ctx));
+
 
         return new ContextReturn(stringBuilder.ToString());
+    }
+
+    private string GetForceText(ContextInfo ctx)
+    {
+        if (ctx.CharacterButtons == null || ctx.CharacterButtons.Count == 0)
+            return "No characters found";
+
+        var forceText = new StringBuilder();
+        forceText.AppendLine("You can select a character using the following indices. If you are happy with your selection, Embark on a new Run");
+        forceText.AppendLine("The available characters are:");
+        for (int i = 0; i < ctx.CharacterButtons.Count; i++)
+        {
+            var btn = ctx.CharacterButtons[i];
+            if (!GodotObject.IsInstanceValid(btn) || btn.IsLocked) continue;
+            forceText.AppendLine($"- '{i}': {GetCharacterName(btn)}");
+        }
+        return forceText.ToString();
     }
 
     public CommandReturn GetCommands(ContextInfo ctx)
@@ -66,7 +86,7 @@ public class CharacterSelectHandler : IContextHandler<CharacterSelectHandler.Res
                 commands.Add(new ConstructedAction("embark", "Start a new run with the currently selected character"));
         }
 
-        return new CommandReturn(commands);
+        return new CommandReturn(commands, ForceText: GetForceText(ctx));
     }
 
 
