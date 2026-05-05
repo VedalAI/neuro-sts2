@@ -52,7 +52,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
             stringBuilder.AppendLine("**Selectable cards:**");
             var player = LocalContext.GetMe(ctx.RunState!.Players);
             if (player != null)
-                stringBuilder.AppendLine(GetAvailableCardsActionText(player));
+                stringBuilder.AppendLine(TextHelper.GetAvailableCardsActionText(player));
         }
         return new ContextReturn(stringBuilder.ToString());
 
@@ -107,28 +107,11 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
         forceText.AppendLine("Select cards from your hand:");
         var player = LocalContext.GetMe(ctx.RunState!.Players);
         if (player != null)
-            forceText.AppendLine(GetAvailableCardsActionText(player));
+            forceText.AppendLine(TextHelper.GetAvailableCardsActionText(player));
 
         return new CommandReturn(commands, ForceText: forceText.ToString());
     }
 
-    private static void AppendPlayableCards(StringBuilder stringBuilder, IReadOnlyList<CardModel> cards)
-    {
-        for (int i = 0; i < cards.Count; i++)
-        {
-            if (cards[i].CanPlay())
-                stringBuilder.AppendLine($"- `{i}`: {TextHelper.StripBBCode(cards[i].Title)}");
-        }
-    }
-    private string GetAvailableCardsActionText(Player player)
-    {
-        var pcs = player.PlayerCombatState;
-        if (pcs == null) return "No player combat state";
-        if (pcs.Hand.Cards.Count == 0) return "Your hand is empty";
-        var text = new StringBuilder();
-        AppendPlayableCards(text, pcs.Hand.Cards);
-        return text.ToString();
-    }
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
         if (action.Name == "choose_hand_cards")
@@ -152,7 +135,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
             foreach (var index in cardIndex)
             {
                 if (index < 0 || index >= holders.Count)
-                    return ExecutionResult.Failure($"Card index {index} out of range (available: {holders.Count})");
+                    return ExecutionResult.Failure($"Card index {index} out of range (available: {holders.Count}), Available cards: {TextHelper.GetAvailableCardsActionText(LocalContext.GetMe(ctx.RunState!.Players))}");
                 held_cards.Add(holders[index]);
 
             }
