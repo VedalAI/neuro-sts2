@@ -178,7 +178,8 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         if (pcs.Hand.Cards.Count > 0 && pcs.Hand.Cards.Any(card => card.CanPlay()))
         {
             stringBuilder.AppendLine("");
-            AppendPlayableCardsSection(stringBuilder, player);
+            stringBuilder.AppendLine("You can play the following cards:");
+            stringBuilder.AppendLine(TextHelper.GetAvailableCardsActionText(player));
         }
 
         if (potionEntries.Count > 0)
@@ -465,11 +466,11 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         if (hand == null || hand.Count <= 0)
             return ExecutionResult.Failure("The hand is not valid");
         if (cardIndex >= hand.Count)
-            return ExecutionResult.Failure($"Card index {cardIndex} out of range for hand size {hand.Count}. Please choose a different card from: {GetAvailableCardsActionText(player)}");
+            return ExecutionResult.Failure($"Card index {cardIndex} out of range for hand size {hand.Count}. Please choose a different card from: {TextHelper.GetAvailableCardsActionText(player)}");
         var card = hand[cardIndex];
         if (card == null || !card.CanPlay())
         {
-            return ExecutionResult.Failure($"Card at index '{cardIndex}' cannot be played. Please choose a different card from: {GetAvailableCardsActionText(player)}");
+            return ExecutionResult.Failure($"Card at index '{cardIndex}' cannot be played. Please choose a different card from: {TextHelper.GetAvailableCardsActionText(player)}");
         }
 
         var combatState = card?.CombatState;
@@ -647,7 +648,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         if (pcs.Hand.Cards.Count == 0) return "Your hand is empty";
         var text = new StringBuilder();
         text.AppendLine("You can play the following cards:");
-        AppendPlayableCards(text, pcs.Hand.Cards);
+        TextHelper.AppendPlayableCards(text, pcs.Hand.Cards);
         return text.ToString();
     }
 
@@ -668,25 +669,6 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         return entries;
     }
 
-    private static void AppendPlayableCardsSection(StringBuilder stringBuilder, Player player)
-    {
-        var pcs = player.PlayerCombatState;
-        if (pcs == null)
-            return;
-
-        stringBuilder.AppendLine("## Cards in hand");
-        stringBuilder.AppendLine("Use these indices when choosing a `play_card` action.");
-        AppendPlayableCards(stringBuilder, pcs.Hand.Cards);
-    }
-
-    private static void AppendPlayableCards(StringBuilder stringBuilder, IReadOnlyList<CardModel> cards)
-    {
-        for (int i = 0; i < cards.Count; i++)
-        {
-            if (cards[i].CanPlay())
-                stringBuilder.AppendLine($"- `{i}`: {TextHelper.StripBBCode(cards[i].Title)}");
-        }
-    }
 
     private static void AppendPotionSection(StringBuilder stringBuilder, IReadOnlyList<(int SlotIndex, PotionModel Potion)> potionEntries, bool includeDescription)
     {

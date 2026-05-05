@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Cards;
@@ -225,5 +226,23 @@ public static class TextHelper
         }
         catch { }
         return "";
+    }
+
+    public static void AppendPlayableCards(StringBuilder stringBuilder, IReadOnlyList<CardModel> cards)
+    {
+        for (int i = 0; i < cards.Count; i++)
+        {
+            if (cards[i].CanPlay())
+                stringBuilder.AppendLine($"- `{i}`: {TextHelper.StripBBCode(cards[i].Title)}");
+        }
+    }
+    public static string GetAvailableCardsActionText(Player player)
+    {
+        var pcs = player.PlayerCombatState;
+        if (pcs == null) return "No player combat state";
+        if (pcs.Hand.Cards.Count == 0) return "Your hand is empty";
+        var text = new StringBuilder();
+        AppendPlayableCards(text, pcs.Hand.Cards);
+        return text.ToString();
     }
 }
