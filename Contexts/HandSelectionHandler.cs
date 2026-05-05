@@ -13,6 +13,8 @@ using Sts2Agent.Utilities;
 using NeuroSdk.Json;
 using System.Text;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
+using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Context;
 
 namespace Sts2Agent.Contexts;
 
@@ -48,7 +50,9 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
         {
             stringBuilder.AppendLine();
             stringBuilder.AppendLine("**Selectable cards:**");
-            stringBuilder.RepresentDeck(holders.Select(holder => holder.CardNode!.Model!), PileType.Hand);
+            var player = LocalContext.GetMe(ctx.RunState!.Players);
+            if (player != null)
+                stringBuilder.AppendLine(GetAvailableCardsActionText(player));
         }
         return new ContextReturn(stringBuilder.ToString());
 
@@ -98,10 +102,33 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
                 commands.Add(new("confirm_selection", "Confirm your selection of cards and proceed"));
             }
         }
+        StringBuilder forceText = new();
 
-        return new CommandReturn(commands);
+        forceText.AppendLine("Select cards from your hand:");
+        var player = LocalContext.GetMe(ctx.RunState!.Players);
+        if (player != null)
+            forceText.AppendLine(GetAvailableCardsActionText(player));
+
+        return new CommandReturn(commands, ForceText: forceText.ToString());
     }
 
+    private static void AppendPlayableCards(StringBuilder stringBuilder, IReadOnlyList<CardModel> cards)
+    {
+        for (int i = 0; i < cards.Count; i++)
+        {
+            if (cards[i].CanPlay())
+                stringBuilder.AppendLine($"- `{i}`: {TextHelper.StripBBCode(cards[i].Title)}");
+        }
+    }
+    private string GetAvailableCardsActionText(Player player)
+    {
+        var pcs = player.PlayerCombatState;
+        if (pcs == null) return "No player combat state";
+        if (pcs.Hand.Cards.Count == 0) return "Your hand is empty";
+        var text = new StringBuilder();
+        AppendPlayableCards(text, pcs.Hand.Cards);
+        return text.ToString();
+    }
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
         if (action.Name == "choose_hand_cards")
