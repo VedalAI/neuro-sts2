@@ -72,7 +72,8 @@ public abstract class AbstractQueuedHandler<TResult> : IContextHandler<TResult>
         }
         finally
         {
-            OnAfterQueuedAction(action, executionResult, freshCtx);
+            if (!ActionExecutor.HasEnqueuedActions())
+                OnAfterQueuedAction(action, executionResult, freshCtx);
             _actionQueue.ActionFinished();
         }
     }
