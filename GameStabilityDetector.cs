@@ -24,10 +24,13 @@ public static class GameStabilityDetector
     public static event Action? OnBecameStable;
     private static bool _pendingCheck;
     private static bool _wasStable;
+    private static bool _firstCheck;
     private static MegaCrit.Sts2.Core.GameActions.ActionExecutor? _subscribedExecutor;
     private static CombatManager? _subscribedCombat;
     private static readonly Callable StabilityCallable = Callable.From(CheckStability);
 
+    private static int? _waitTimeBeforeNextCheck;
+    private static int TimeSinceLastCheck;
     public static void Initialize()
     {
         TrySubscribeToActionExecutor();
@@ -92,6 +95,7 @@ public static class GameStabilityDetector
     {
         Plugin.LogDebug($"ResetWasStable: _wasStable was {_wasStable}, setting to false");
         _wasStable = false;
+        _firstCheck = true;
     }
 
     public static void OnHandSelectionEntered()
@@ -129,12 +133,18 @@ public static class GameStabilityDetector
     private static void CheckStability()
     {
         _pendingCheck = false;
+        if (_wasStable)
+        {
+            Plugin.LogDebug("CheckStability: already stable, skipping check");
+            return;
+        }
         var stable = IsStable();
         if (stable && !_wasStable)
         {
             _wasStable = true;
             Plugin.Log("=== GAME STABLE ===");
             OnBecameStable?.Invoke();
+            _firstCheck = true;
         }
         else if (stable && _wasStable)
         {
@@ -165,171 +175,226 @@ public static class GameStabilityDetector
             _pendingCheck = false;
             return;
         }
-        var timer = tree.CreateTimer(0.5);
+        var timer = tree.CreateTimer(0.1);
         timer.Timeout += OnDelayedCheckTimeout;
+    }
+
+
+    private static void LogDebug(string message)
+    {
+        if (_firstCheck)
+            Plugin.LogDebug($"[GameStabilityDetector] {message}");
     }
 
     public static bool IsStable()
     {
-        Plugin.LogDebug("Checking game stability...");
-        var ctx = GameContext.Resolve();
-        if (ctx == null)
+        if (_waitTimeBeforeNextCheck != null)
         {
-            Plugin.LogDebug("IsStable: no context → false");
-            return false;
-        }
-
-        if (ActionExecutor.HasRunningActions())
-        {
-            Plugin.LogDebug("IsStable: integration action still running → false");
-            return false;
-        }
-
-        if (!IsMultiplayerStable(ctx))
-        {
-            Plugin.LogDebug("IsStable: multiplayer state not stable → false");
-            return false;
-        }
-
-        switch (ctx.Type)
-        {
-            case ContextType.Unknown:
-                Plugin.LogDebug("IsStable: unknown context → false");
+            if (TimeSinceLastCheck < _waitTimeBeforeNextCheck)
+            {
+                Plugin.LogDebug($"IsStable: waiting before next check ({TimeSinceLastCheck}/{_waitTimeBeforeNextCheck} seconds) → false");
+                TimeSinceLastCheck++;
                 return false;
+            }
+            else
+            {
+                Plugin.LogDebug("IsStable: wait time elapsed, proceeding with stability check");
+                _waitTimeBeforeNextCheck = null;
+                TimeSinceLastCheck = 0;
+            }
+        }
+        try
+        {
+            LogDebug("Checking game stability...");
+            var ctx = GameContext.Resolve();
+            if (ctx == null)
+            {
+                LogDebug("IsStable: no context → false");
+                return false;
+            }
 
-            case ContextType.Map:
-                {
-                    var ms = NMapScreen.Instance;
-                    if (ms is { IsTravelEnabled: true })
-                    {
-                        Plugin.LogDebug("IsStable: map screen, travel enabled → true");
-                        return true;
-                    }
-                    // Map is open but not interactive — if travel finished, close it
-                    // so the room underneath becomes visible to viewers and agent
-                    if (ms is { IsTraveling: false })
-                    {
-                        Plugin.Log("Map overlay stuck open after travel — closing");
-                        ms.Close();
-                    }
-                    if (ms != null)
-                        Plugin.LogDebug($"IsStable: map screen, travel not enabled (traveling={ms?.IsTraveling}) → false");
+            if (ActionExecutor.HasRunningActions())
+            {
+                LogDebug("IsStable: integration action still running → false");
+                return false;
+            }
+
+            if (!IsMultiplayerStable(ctx))
+            {
+                LogDebug("IsStable: multiplayer state not stable → false");
+                return false;
+            }
+
+            switch (ctx.Type)
+            {
+                case ContextType.Unknown:
+                    LogDebug("IsStable: unknown context → false");
                     return false;
-                }
 
-            case ContextType.BundleSelection:
-            case ContextType.CardSelection:
-            case ContextType.CrystalBallEvent:
-            case ContextType.Rewards:
-                Plugin.LogDebug($"IsStable: overlay {ctx.Type} → true");
-                return true;
-
-            case ContextType.HandSelection:
-                Plugin.LogDebug("IsStable: hand card selection → true");
-                return true;
-
-            case ContextType.Combat:
-                {
-                    var cm = CombatManager.Instance;
-                    var pcs = LocalContext.GetMe(ctx.RunState.Players)?.PlayerCombatState;
-                    var result = cm != null
-                        && pcs != null
-                        && pcs.Phase == PlayerTurnPhase.Play
-                        && !cm.PlayerActionsDisabled
-                        && RunManager.Instance.ActionExecutor.CurrentlyRunningAction == null;
-                    if (cm != null && pcs != null)
-                        Plugin.LogDebug($"IsStable: combat → IsPlayPhase={pcs?.Phase == PlayerTurnPhase.Play}, Current Phase= {pcs?.Phase}, ActionsDisabled={cm?.PlayerActionsDisabled}, RunningAction={RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.GetType().Name ?? "null"} → {result}");
-                    return result;
-                }
-
-            case ContextType.Event:
-                {
-                    var evt = ctx.EventRoom?.LocalMutableEvent;
-                    if ((evt is AncientEventModel && EventContextHandler.TryAdvanceAncientDialogue()) || evt == null)
-                        return false;
-                    var evtResult = evt != null && (evt.CurrentOptions.Count > 0 || evt.IsFinished);
-                    if (evt != null)
-                        Plugin.LogDebug($"IsStable: event → hasEvent={evt != null}, options={evt?.CurrentOptions.Count ?? 0}, finished={evt?.IsFinished} → {evtResult}");
-                    return evtResult;
-                }
-
-            case ContextType.RestSite:
-                if (ctx.RestSiteRoom != null && NRestSiteRoom.Instance is NRestSiteRoom restSite)
-                {
-                    if (UiHelper.FindFirst<NProceedButton>(restSite) is NProceedButton proceedBtn && proceedBtn.Visible && proceedBtn.IsEnabled)
+                case ContextType.Map:
                     {
-                        var proceedEnabled = proceedBtn.IsEnabled;
-                        Plugin.LogDebug($"IsStable Restsite: proceed button enabled={proceedEnabled} → {proceedEnabled}");
+                        if (_firstCheck)
+                        {
+                            LogDebug("First check for event context, adding wait time before next check to allow event options to populate");
+                            _waitTimeBeforeNextCheck = 10; // Wait for 5 seconds before allowing stability checks to pass, giving time for event options to populate
+                            return false;
+                        }
+                        var ms = NMapScreen.Instance;
+                        if (ms is { IsTravelEnabled: true })
+                        {
+                            Plugin.LogDebug("IsStable: map screen, travel enabled → true");
+                            return true;
+                        }
+                        // Map is open but not interactive — if travel finished, close it
+                        // so the room underneath becomes visible to viewers and agent
+                        if (ms is { IsTraveling: false })
+                        {
+                            Plugin.Log("Map overlay stuck open after travel — closing");
+                            ms.Close();
+                        }
+                        if (ms != null)
+                            LogDebug($"IsStable: map screen, travel not enabled (traveling={ms?.IsTraveling}) → false");
+                        return false;
+                    }
+
+                case ContextType.BundleSelection:
+                case ContextType.CardSelection:
+                case ContextType.CrystalBallEvent:
+                case ContextType.Rewards:
+                    LogDebug($"IsStable: overlay {ctx.Type} → true");
+                    return true;
+
+                case ContextType.HandSelection:
+                    LogDebug("IsStable: hand card selection → true");
+                    return true;
+
+                case ContextType.Combat:
+                    {
+                        var cm = CombatManager.Instance;
+                        var pcs = LocalContext.GetMe(ctx.RunState.Players)?.PlayerCombatState;
+                        var result = cm != null
+                            && pcs != null
+                            && pcs.Phase == PlayerTurnPhase.Play
+                            && !cm.PlayerActionsDisabled
+                            && RunManager.Instance.ActionExecutor.CurrentlyRunningAction == null;
+                        if (cm != null && pcs != null)
+                            LogDebug($"IsStable: combat → IsPlayPhase={pcs?.Phase == PlayerTurnPhase.Play}, Current Phase= {pcs?.Phase}, ActionsDisabled={cm?.PlayerActionsDisabled}, RunningAction={RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.GetType().Name ?? "null"} → {result}");
+                        if (result)
+                        {
+                            Plugin.LogDebug($"Combat is Stable");
+                        }
+                        return result;
+                    }
+
+                case ContextType.Event:
+                    {
+                        var evt = ctx.EventRoom?.LocalMutableEvent;
+                        if ((evt is AncientEventModel && EventContextHandler.TryAdvanceAncientDialogue()) || evt == null || evt.Node == null || !evt.Node.Visible)
+                            return false;
+                        if (_firstCheck)
+                        {
+                            LogDebug("First check for event context, adding wait time before next check to allow event options to populate");
+                            _waitTimeBeforeNextCheck = 10; // Wait for 5 seconds before allowing stability checks to pass, giving time for event options to populate
+                            return false;
+                        }
+                        var evtResult = evt != null && (evt.CurrentOptions.Count > 0 || evt.IsFinished);
+                        if (evt != null)
+                            LogDebug($"IsStable: event → hasEvent={evt != null}, options={evt?.CurrentOptions.Count ?? 0}, finished={evt?.IsFinished} → {evtResult}");
+                        if (evtResult)
+                        {
+                            Plugin.LogDebug($"IsStable: event → {evtResult}");
+                        }
+                        return evtResult;
+                    }
+
+                case ContextType.RestSite:
+                    if (ctx.RestSiteRoom != null && NRestSiteRoom.Instance is NRestSiteRoom restSite)
+                    {
+                        if (UiHelper.FindFirst<NProceedButton>(restSite) is NProceedButton proceedBtn && proceedBtn.Visible && proceedBtn.IsEnabled)
+                        {
+                            var proceedEnabled = proceedBtn.IsEnabled;
+                            Plugin.LogDebug($"IsStable Restsite: proceed button enabled={proceedEnabled} → {proceedEnabled}");
+                            return proceedEnabled;
+                        }
+                        if (UiHelper.FindAll<NRestSiteButton>(restSite) is IEnumerable<NRestSiteButton> anyBtn && anyBtn.Any(b => b.Visible && b.IsEnabled))
+                        {
+                            var anyBtnEnabled = anyBtn.Any(b => b.Visible && b.IsEnabled);
+                            Plugin.LogDebug($"IsStable Restsite: any button enabled={anyBtnEnabled} → {anyBtnEnabled}");
+                            return anyBtnEnabled;
+                        }
+                    }
+
+                    LogDebug($"IsStable Restsite: {ctx.Type} → false");
+                    return false;
+                case ContextType.Shop:
+                    Plugin.LogDebug($"IsStable: {ctx.Type} → true");
+                    return true;
+
+                case ContextType.GameOver:
+                    {
+                        var goScreen = MegaCrit.Sts2.Core.Nodes.Screens.Overlays.NOverlayStack.Instance?.Peek()
+                            as MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NGameOverScreen;
+                        if (goScreen == null)
+                        {
+                            LogDebug("IsStable: game over screen not found → false");
+                            return false;
+                        }
+                        var mainMenuBtn = UiHelper.FindFirst<MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NReturnToMainMenuButton>(goScreen);
+                        if (mainMenuBtn != null && mainMenuBtn.Visible && mainMenuBtn.IsEnabled)
+                        {
+                            Plugin.LogDebug("IsStable: game over main menu button ready → true");
+                            return true;
+                        }
+                        var continueBtn = UiHelper.FindFirst<MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NGameOverContinueButton>(goScreen);
+                        var ready = continueBtn != null && continueBtn.IsEnabled;
+                        LogDebug($"IsStable: game over continue enabled={ready} → {ready}");
+                        return ready;
+                    }
+
+                case ContextType.MainMenu:
+                    LogDebug("IsStable: main menu → true");
+                    return true;
+                case ContextType.TimelinesEvent:
+                    if (_firstCheck)
+                    {
+                        LogDebug("First check for event context, adding wait time before next check to allow event options to populate");
+                        _waitTimeBeforeNextCheck = 10; // Wait for 5 seconds before allowing stability checks to pass, giving time for event options to populate
+                        return false;
+                    }
+                    LogDebug("IsStable: timelines event → true");
+                    return true;
+                case ContextType.CharacterSelect:
+                    LogDebug("IsStable: character select → true");
+                    return true;
+
+                case ContextType.Treasure:
+                    {
+                        if (TreasureRoomAutoPatch.AutoClickInProgress)
+                        {
+                            LogDebug("IsStable: treasure auto-click in progress → false");
+                            return false;
+                        }
+                        var treasureRoom = TreasureRoomAutoPatch.CurrentRoom;
+                        var proceedEnabled = treasureRoom != null
+                            && GodotObject.IsInstanceValid(treasureRoom)
+                            && treasureRoom.ProceedButton?.IsEnabled == true;
+                        LogDebug($"IsStable: treasure proceed={proceedEnabled} → {proceedEnabled}");
                         return proceedEnabled;
                     }
-                    if (UiHelper.FindAll<NRestSiteButton>(restSite) is IEnumerable<NRestSiteButton> anyBtn && anyBtn.Any(b => b.Visible && b.IsEnabled))
-                    {
-                        var anyBtnEnabled = anyBtn.Any(b => b.Visible && b.IsEnabled);
-                        Plugin.LogDebug($"IsStable Restsite: any button enabled={anyBtnEnabled} → {anyBtnEnabled}");
-                        return anyBtnEnabled;
-                    }
-                }
-
-                Plugin.LogDebug($"IsStable Restsite: {ctx.Type} → false");
-                return false;
-            case ContextType.Shop:
-                Plugin.LogDebug($"IsStable: {ctx.Type} → true");
-                return true;
-
-            case ContextType.GameOver:
-                {
-                    var goScreen = MegaCrit.Sts2.Core.Nodes.Screens.Overlays.NOverlayStack.Instance?.Peek()
-                        as MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NGameOverScreen;
-                    if (goScreen == null)
-                    {
-                        Plugin.LogDebug("IsStable: game over screen not found → false");
-                        return false;
-                    }
-                    var mainMenuBtn = UiHelper.FindFirst<MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NReturnToMainMenuButton>(goScreen);
-                    if (mainMenuBtn != null && mainMenuBtn.Visible && mainMenuBtn.IsEnabled)
-                    {
-                        Plugin.LogDebug("IsStable: game over main menu button ready → true");
-                        return true;
-                    }
-                    var continueBtn = UiHelper.FindFirst<MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NGameOverContinueButton>(goScreen);
-                    var ready = continueBtn != null && continueBtn.IsEnabled;
-                    Plugin.LogDebug($"IsStable: game over continue enabled={ready} → {ready}");
-                    return ready;
-                }
-
-            case ContextType.MainMenu:
-                Plugin.LogDebug("IsStable: main menu → true");
-                return true;
-            case ContextType.TimelinesEvent:
-                Plugin.LogDebug("IsStable: timelines event → true");
-                return true;
-            case ContextType.CharacterSelect:
-                Plugin.LogDebug("IsStable: character select → true");
-                return true;
-
-            case ContextType.Treasure:
-                {
-                    if (TreasureRoomAutoPatch.AutoClickInProgress)
-                    {
-                        Plugin.LogDebug("IsStable: treasure auto-click in progress → false");
-                        return false;
-                    }
-                    var treasureRoom = TreasureRoomAutoPatch.CurrentRoom;
-                    var proceedEnabled = treasureRoom != null
-                        && GodotObject.IsInstanceValid(treasureRoom)
-                        && treasureRoom.ProceedButton?.IsEnabled == true;
-                    Plugin.LogDebug($"IsStable: treasure proceed={proceedEnabled} → {proceedEnabled}");
-                    return proceedEnabled;
-                }
-            default:
-                return false;
+                default:
+                    return false;
+            }
+        }
+        finally
+        {
+            _firstCheck = false;
         }
     }
 
     //TODO: Event also seems to return stable even without options. Maybe stability check happens for every user connected? instead of just the local player?
     private static bool IsMultiplayerStable(ContextInfo ctx)
     {
-        Plugin.LogDebug("Checking multiplayer stability...");
+        LogDebug("Checking multiplayer stability...");
         if (RunManager.Instance == null)
         {
             Plugin.LogDebug("IsMultiplayerStable: RunManager instance is null → true (not in a run)");
@@ -341,7 +406,7 @@ public static class GameStabilityDetector
             return true;
         }
         if (!RunManager.Instance.NetService.Type.IsMultiplayer()) return true;
-        Plugin.LogDebug("IsMultiplayerStable: multiplayer run detected");
+        LogDebug("IsMultiplayerStable: multiplayer run detected");
 
         switch (ctx.Type)
         {
@@ -350,40 +415,45 @@ public static class GameStabilityDetector
                     var player = LocalContext.GetMe(ctx.RunState.Players);
                     if (player == null)
                     {
-                        Plugin.LogDebug("IsMultiplayerStable: local player not found → false");
+                        LogDebug("IsMultiplayerStable: local player not found → false");
                         return false;
                     }
                     var pcs = player?.PlayerCombatState;
                     if (pcs == null)
                     {
-                        Plugin.LogDebug("IsMultiplayerStable: player combat state is null → false");
+                        LogDebug("IsMultiplayerStable: player combat state is null → false");
                         return false;
                     }
                     var combatManager = CombatManager.Instance;
                     if (combatManager == null)
                     {
-                        Plugin.LogDebug("IsMultiplayerStable: combat manager instance is null → false");
+                        LogDebug("IsMultiplayerStable: combat manager instance is null → false");
                         return false;
                     }
                     var stable = (pcs.Phase == PlayerTurnPhase.Play || pcs.Phase == PlayerTurnPhase.Start) && !combatManager.IsPlayerReadyToEndTurn(player);
-                    Plugin.LogDebug($"IsMultiplayerStable: combat phase={pcs.Phase} → {stable}");
+                    LogDebug($"IsMultiplayerStable: combat phase={pcs.Phase} → {stable}");
                     if (!stable) return false;
                     return true;
                 }
             case ContextType.Map:
                 {
+                    if (_firstCheck)
+                    {
+                        _waitTimeBeforeNextCheck = 10; // Wait for 5 seconds before allowing stability checks to pass, giving time for event options to populate
+                        return false;
+                    }
                     var ms = NMapScreen.Instance;
                     var player = LocalContext.GetMe(ctx.RunState.Players);
                     if (player == null)
                     {
-                        Plugin.LogDebug("IsMultiplayerStable: local player not found → false");
+                        LogDebug("IsMultiplayerStable: local player not found → false");
                         return false;
                     }
                     if (ms is { IsTravelEnabled: true, IsOpen: true })
                     {
                         if (ms.PlayerVoteDictionary.TryGetValue(player, out var vote) && vote != null)
                         {
-                            Plugin.LogDebug($"IsMultiplayerStable: player vote={vote} → false (waiting for all votes)");
+                            LogDebug($"IsMultiplayerStable: player vote={vote} → false (waiting for all votes)");
                             return false;
                         }
                         Plugin.LogDebug("IsMultiplayerStable: map screen, travel enabled → true");
@@ -397,7 +467,7 @@ public static class GameStabilityDetector
                         ms.Close();
                     }
                     if (ms != null)
-                        Plugin.LogDebug($"IsMultiplayerStable: map screen, travel not enabled (traveling={ms?.IsTraveling}) → false");
+                        LogDebug($"IsMultiplayerStable: map screen, travel not enabled (traveling={ms?.IsTraveling}) → false");
                     return false;
                 }
             default:
