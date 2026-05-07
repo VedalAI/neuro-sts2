@@ -178,6 +178,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         if (pcs.Hand.Cards.Count > 0 && pcs.Hand.Cards.Any(card => card.CanPlay()))
         {
             stringBuilder.AppendLine("");
+            stringBuilder.AppendLine($"# You currently have {pcs.Energy} Energy and {pcs.Stars} Stars to use");
             stringBuilder.AppendLine("You can play the following cards:");
             stringBuilder.AppendLine(TextHelper.GetAvailableCardsActionText(player));
         }
@@ -219,7 +220,8 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         }
         else
         {
-            prompt.AppendLine(GetAvailableCardsActionText(player));
+            prompt.AppendLine($"You have {pcs.Energy} Energy and {pcs.Stars} Stars to spend. You can play the following cards:");
+            prompt.AppendLine(TextHelper.GetAvailableCardsActionText(player));
         }
         if (availablePotions.Count > 0)
         {
@@ -278,7 +280,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         if (!_invalidatedActions.Contains("end_turn"))
             commands.Add(new("end_turn", "Ends your current turn"));
 
-        return new CommandReturn(commands, true, ForceText: prompt.ToString());
+        return new CommandReturn(commands, true, ForceText: prompt.ToString(), DontAutomaticallyExecute: true);
     }
 
 
@@ -550,7 +552,6 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         {
             return;
         }
-
         var freshContext = GameContext.Resolve();
         if (freshContext == null || freshContext.Type != ContextType.Combat)
         {
@@ -558,14 +559,13 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
             return;
         }
 
-        var context = getContext(freshCtx, afterPlayed: true);
-        NeuroIntegration.SendContext(context.Message, context.Silent);
-
         if (ActionQueue.Count <= 1)
         {
+            var context = getContext(freshCtx, afterPlayed: true);
+            NeuroIntegration.SendContext(context.Message, context.Silent);
             var commandReturn = GetCommands(freshContext);
-            if (!commandReturn.Commands.All(x => x.Name == "end_turn"))
-                NeuroIntegration.Reforce(commandReturn.ForceText);
+            // if (!commandReturn.Commands.All(x => x.Name == "end_turn"))
+            NeuroIntegration.Reforce(commandReturn.ForceText);
         }
     }
 
@@ -587,7 +587,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
             Plugin.LogDebug(e.Message);
             return ExecutionResult.Failure("Playing the card threw an exception");
         }
-        await Task.Delay(500); // Small delay to make it a better viewing experience
+        await Task.Delay(100); // Small delay to make it a better viewing experience
         Plugin.Log($"Played card");
         return ExecutionResult.Success("Card played");
     }
@@ -608,6 +608,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(
             new MegaCrit.Sts2.Core.GameActions.EndPlayerTurnAction(player, roundNumber));
 
+        NeuroIntegration.SendContext("Your turn has ended. Please wait for the next turn before playing anymore cards or calling any tools", true);
         Plugin.Log("Ended turn");
         firstContext = true;
         await Task.Delay(200); // Small delay to make it a better viewing experience
@@ -639,17 +640,6 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         }
 
         return energyCost <= _projectedEnergyRemaining && starCost <= _projectedStarsRemaining;
-    }
-
-    private string GetAvailableCardsActionText(Player player)
-    {
-        var pcs = player.PlayerCombatState;
-        if (pcs == null) return "No player combat state";
-        if (pcs.Hand.Cards.Count == 0) return "Your hand is empty";
-        var text = new StringBuilder();
-        text.AppendLine("You can play the following cards:");
-        TextHelper.AppendPlayableCards(text, pcs.Hand.Cards);
-        return text.ToString();
     }
 
     private List<(int SlotIndex, PotionModel Potion)> GetPotionEntries(Player player, bool excludeProjectedUsed = false)
