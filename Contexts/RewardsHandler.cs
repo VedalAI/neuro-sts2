@@ -75,6 +75,7 @@ public class RewardsHandler : AbstractQueuedHandler<RewardsHandler.Result>, IOnC
             {
                 ["reward_index"] = QJS.Type(JsonSchemaType.Integer)
             })));
+            commands.Add(new("collect_all", "Collect all rewards. This is the same as claiming each reward one by one, but a lot faster. Prefer using this over the claim_reward tool. Use this is you want to quickly collect all rewards. You will still be prompted to select cards if there are card rewards"));
         }
         bool persistent = true;
 
@@ -97,6 +98,59 @@ public class RewardsHandler : AbstractQueuedHandler<RewardsHandler.Result>, IOnC
         var rewardsScreen = ctx.RewardsScreen;
         if (rewardsScreen == null)
             return ExecutionResult.Failure("No rewards screen");
+        if (action.Name == "collect_all")
+        {
+            var enabledRewardButtons = GetEnabledRewardButtons(rewardsScreen);
+            if (enabledRewardButtons.Count == 0)
+                return ExecutionResult.Failure("No rewards to collect");
+
+            var rewardEntries = GetRewardEntries(rewardsScreen);
+            if (rewardEntries.Count == 0)
+                return ExecutionResult.Failure("No rewards to collect");
+
+            NeuroIntegration.UnregisterAllActions();
+            foreach (var reward in rewardEntries)
+            {
+                ActionExecutor.EnqueueAction(new ConstructedAction("claim_first_reward", ""));
+            }
+            return ExecutionResult.Success();
+        }
+        if (action.Name == "claim_first_reward")
+        {
+            var rewardEntries = GetRewardEntries(rewardsScreen);
+            if (rewardEntries.Count == 0)
+            {
+                return ExecutionResult.Failure("No rewards to collect");
+            }
+            var rewardEntry = rewardEntries[0];
+            result.RequiresPotionSlot = rewardEntry.Button.Reward is PotionReward;
+            if (result.RequiresPotionSlot)
+            {
+                var player = LocalContext.GetMe(ctx.RunState!.Players);
+                if (player != null && player.PotionSlots.All(x => x != null))
+                {
+                    //Get the next reward that isn't a potion
+                    if (rewardEntries.Any(e => e.Button.Reward is not PotionReward))
+                    {
+                        rewardEntry = rewardEntries.FirstOrDefault(e => e.Button.Reward is not PotionReward);
+                        if (rewardEntry == null)
+                        {
+                            ActionExecutor.EnqueueAction(new ConstructedAction("proceed", ""));
+                            return ExecutionResult.Failure("Potion slots are full, can't pick up more potions");
+                        }
+                    }
+                    else
+                    {
+                        ActionExecutor.EnqueueAction(new ConstructedAction("proceed", ""));
+                        return ExecutionResult.Failure("Potion slots are full, can't pick up more potions");
+                    }
+                }
+            }
+            result.Button = rewardEntry.Button;
+            result.RewardButtonId = rewardEntry.Button.GetInstanceId();
+            result.RewardLabel = rewardEntry.DisplayLabel;
+            return ExecutionResult.Success();
+        }
 
         if (action.Name == "claim_reward")
         {
@@ -150,6 +204,10 @@ public class RewardsHandler : AbstractQueuedHandler<RewardsHandler.Result>, IOnC
             }
 
             _reservedRewardButtonIds.Add(result.RewardButtonId);
+            if (rewardEntries.Count == 1)
+            {
+                NeuroIntegration.UnregisterAllActions();
+            }
             return ExecutionResult.Success();
         }
         else
@@ -166,7 +224,7 @@ public class RewardsHandler : AbstractQueuedHandler<RewardsHandler.Result>, IOnC
         return action.Name switch
         {
             "proceed" or "skip_rewards" => await Proceed(result),
-            "claim_reward" => await SelectReward(result),
+            "claim_reward" or "claim_first_reward" => await SelectReward(result),
             _ => null
         };
     }
@@ -201,7 +259,7 @@ public class RewardsHandler : AbstractQueuedHandler<RewardsHandler.Result>, IOnC
         try
         {
             await GodotMainThread.ClickAsync(result.Button);
-            await Task.Delay(500); // Wait for the reward to be claimed and the button to be disabled/removed
+            // await Task.Delay(500); // Wait for the reward to be claimed and the button to be disabled/removed
             Plugin.Log($"Selected reward {result.RewardLabel}");
             return ExecutionResult.Success("Reward selected");
         }
