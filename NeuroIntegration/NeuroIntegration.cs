@@ -168,6 +168,7 @@ public class NeuroIntegration : Node
       UnregisterAllActions();
       lastWindow?.End();
       lastContext = ctx.Type;
+      ActionExecutor.ClearActions();
     }
 
     var handler = ActionExecutor.GetHandlers().GetValueOrDefault(ctx.Type);
