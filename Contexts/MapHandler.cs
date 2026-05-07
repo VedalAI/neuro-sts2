@@ -15,6 +15,7 @@ using System.Text;
 using NeuroSdk.Json;
 using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Context;
+using NeuroSdk.Messages.Outgoing;
 
 namespace Sts2Agent.Contexts;
 
@@ -43,6 +44,13 @@ public class MapHandler : IContextHandler<MapHandler.Result>
     public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
+        if (ctx.AvailableMapNodes == null) return new CommandReturn();
+        if (ctx.AvailableMapNodes.Count == 1)
+        {
+            ActionExecutor.EnqueueAction(new ConstructedAction("select_first_node", ""));
+            NeuroIntegration.SendContext("Open map, Only a single travel point available, Moving to: " + GetMapPointName(ctx.AvailableMapNodes[0].PointType) + " Room , Automatically", true);
+            return new();
+        }
         if (Plugin.IsMultiplayer())
         {
             var ms = NMapScreen.Instance;
@@ -51,7 +59,6 @@ public class MapHandler : IContextHandler<MapHandler.Result>
                 return new CommandReturn();
         }
 
-        if (ctx.AvailableMapNodes == null) return new CommandReturn();
 
         commands.Add(new("select_map_node", "Select a point to travel to", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
@@ -68,16 +75,31 @@ public class MapHandler : IContextHandler<MapHandler.Result>
         }
 
 
-        return new CommandReturn(commands, ForceText: forceText.ToString());
+        return new CommandReturn(commands, ForceText: forceText.ToString(), ForcePriority: ActionsForce.Priority.Medium);
     }
 
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
-        if (action.Name != "select_map_node") return ExecutionResult.ModFailure("Unknown action called in the map");
         var sceneRoot = SceneHelper.GetSceneRoot();
         if (sceneRoot == null)
             return ExecutionResult.Failure("Cannot access scene tree");
+        if (action.Name == "select_first_node")
+        {
+            if (ctx.AvailableMapNodes == null || ctx.AvailableMapNodes.Count == 0)
+                return ExecutionResult.Unstable("No available map nodes to select");
+            var target = ctx.AvailableMapNodes[0];
+            var mapPointNodes = UiHelper.FindAll<NMapPoint>(sceneRoot);
+            var targetNode = mapPointNodes.FirstOrDefault(mp =>
+                mp.Point.coord.row == target.coord.row && mp.Point.coord.col == target.coord.col);
+
+            if (targetNode == null)
+                return ExecutionResult.Failure($"Map node UI element not found for ({target.coord.row}, {target.coord.col})");
+            Plugin.Log($"Automatically selected the only available map node ({target.coord.row}, {target.coord.col})");
+            parsedData.Target = targetNode;
+            return ExecutionResult.Success();
+        }
+        if (action.Name != "select_map_node") return ExecutionResult.ModFailure("Unknown action called in the map");
         if (data.Data?["coordIndex"]?.GetValue<int>() is not int index)
         {
             return ExecutionResult.Failure("Missing parameter: coordIndex");
