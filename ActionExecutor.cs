@@ -123,6 +123,7 @@ public static class ActionExecutor
                     try
                     {
                         GameStabilityDetector.ResetWasStable();
+                        await Task.Delay(200);
                         var task = handler?.Internal_TryExecute(action, ParsedData, ctx);
                         if (task == null)
                         {
@@ -145,6 +146,7 @@ public static class ActionExecutor
                         {
                             Plugin.LogError($"[CRITICAL] Action has Errored during Execution with Message: {result.Message}, The Validation or Execution are wrong for handler of action: {action.Name}");
                         }
+                        await Task.Delay(200);
                         Plugin.LogDebug($"Finished Executing Action: {action.Name}, scheduling stability check...");
                         shouldScheduleStabilityCheck = true;
                     }
