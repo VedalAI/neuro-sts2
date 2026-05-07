@@ -54,6 +54,13 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
             if (player != null)
                 stringBuilder.AppendLine(TextHelper.GetAvailableCardsActionText(player, true));
         }
+        if (ReflectionCache.HandConfirmButton != null)
+        {
+            if (ReflectionCache.HandConfirmButton.GetValue(hand) is NConfirmButton confirmButton && confirmButton.IsEnabled)
+            {
+                return new();
+            }
+        }
         return new ContextReturn(stringBuilder.ToString());
 
     }
