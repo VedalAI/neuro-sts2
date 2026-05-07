@@ -202,4 +202,9 @@ public static class ActionExecutor
     /// </summary>
     public static IReadOnlyDictionary<ContextType, IContextHandler> GetHandlers() => Handlers;
 
+    internal static void ClearActions()
+    {
+        Plugin.LogDebug($"Clearing {enqueuedActions.Count} enqueued actions");
+        enqueuedActions.Clear();
+    }
 }
