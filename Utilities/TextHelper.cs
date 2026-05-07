@@ -228,12 +228,23 @@ public static class TextHelper
         return "";
     }
 
+    public static string GetCardCosts(CardModel card)
+    {
+        var costs = new List<string>
+        {
+            $"Cost: {card.EnergyCost.GetAmountToSpend()} Energy"
+        };
+        if (card.CurrentStarCost > 0)
+            costs.Add($" and {card.CurrentStarCost} Stars");
+        return string.Join("", costs);
+    }
+
     public static void AppendPlayableCards(StringBuilder stringBuilder, IReadOnlyList<CardModel> cards, bool allHandCards = true)
     {
         for (int i = 0; i < cards.Count; i++)
         {
             if (allHandCards || cards[i].CanPlay())
-                stringBuilder.AppendLine($"- `{i}`: {StripBBCode(cards[i].Title)}");
+                stringBuilder.AppendLine($"- `{i}`: {StripBBCode(cards[i].Title)} ({GetCardCosts(cards[i])})");
         }
     }
     public static string GetAvailableCardsActionText(Player player, bool allHandCards = false)

@@ -5,6 +5,7 @@ using STS2NeuroIntegration;
 using NeuroSdk.Actions;
 using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
+using NeuroSdk.Messages.Outgoing;
 
 namespace Sts2Agent.Contexts;
 
@@ -13,11 +14,14 @@ public struct ContextReturn(string message, bool silent = false)
     public string Message = message;
     public bool Silent = silent;
 }
-public struct CommandReturn(List<ConstructedAction> commands, bool persistent = false, string ForceText = "Its your turn to act!")
+public struct CommandReturn(List<ConstructedAction> commands, bool persistent = false, string ForceText = "Its your turn to act!", ActionsForce.Priority ForcePriority = ActionsForce.Priority.Low, bool DontAutomaticallyExecute = false)
 {
     public List<ConstructedAction> Commands = commands;
     public string ForceText = ForceText;
+    public ActionsForce.Priority ForcePriority = ForcePriority;
     public bool Persistent = persistent;
+
+    public bool DontAutomaticallyExecute = DontAutomaticallyExecute;
 }
 public interface IContextResult { }
 public interface IContextHandler

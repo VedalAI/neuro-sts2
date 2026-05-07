@@ -207,7 +207,7 @@ public class NeuroIntegration : Node
         return;
       }
       Plugin.LogDebug($"Commands list contains {CommandsList.Commands.Count} commands. Is a Persistent CommandReturn: {CommandsList.Persistent}");
-      if (CommandsList.Commands.Count == 1 && !CommandsList.Commands[0].HasSchema())
+      if (CommandsList.Commands.Count == 1 && !CommandsList.Commands[0].HasSchema() && !CommandsList.DontAutomaticallyExecute)
       {
         ActionExecutor.EnqueueAction(CommandsList.Commands[0]);
         if (!string.IsNullOrEmpty(contextReturn.Message))
@@ -253,17 +253,17 @@ public class NeuroIntegration : Node
       if (!CommandsList.Persistent)
       {
         UnregisterAllActions();
-        lastWindow!.SetForce(0, CommandsList.ForceText, null);
+        lastWindow!.SetForce(0, CommandsList.ForceText, null, priority: CommandsList.ForcePriority);
         lastWindow!.Register();
         Plugin.LogDebug("Forcing new Action Window with commands: " + string.Join(", ", CommandsList.Commands.Select(c => c.Name)));
       }
       else
       {
         Plugin.LogDebug($"Is currently forcing: {is_forcing}, Global Actions Count: {GlobalActions.Count}");
-        if (GlobalActions.Count > 0 && !is_forcing && new_global_actions.Count > 0)
+        if (GlobalActions.Count > 0 && !is_forcing)
         {
           Plugin.LogDebug("Forcing new Global Actions with commands: " + string.Join(", ", CommandsList.Commands.Select(c => c.Name)));
-          var force = new ActionsForce(CommandsList.ForceText, null, false, ActionsForce.Priority.Low, GlobalActions);
+          var force = new ActionsForce(CommandsList.ForceText, null, false, CommandsList.ForcePriority, GlobalActions);
           if (!string.IsNullOrEmpty(contextReturn.Message))
             SendContext(contextReturn.Message, contextReturn.Silent);
           lastWindow?.End();
