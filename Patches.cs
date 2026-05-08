@@ -43,6 +43,28 @@ public static class CombatSetupPatch
     }
 }
 
+[HarmonyPatch(typeof(CombatManager), nameof(CombatManager.EndCombatInternal))]
+public static class CombatEndInternalPatch
+{
+    [HarmonyPrefix]
+    public static void Prefix()
+    {
+        try
+        {
+            Plugin.LogDebug("Combat ending internally — clearing combat actions and scheduling context refresh");
+            NeuroIntegration.EndForce();
+            NeuroIntegration.UnregisterAllActions();
+            ActionExecutor.ClearActions();
+            GameStabilityDetector.OnScreenTransition();
+            NeuroIntegration.SendContext("Combat has Ended. Don't use any Combat related actions from now on.", true);
+        }
+        catch (Exception e)
+        {
+            Plugin.LogError($"Error in CombatEndInternalPatch: {e}");
+        }
+    }
+}
+
 [HarmonyPatch(typeof(NOverlayStack), nameof(NOverlayStack.Push))]
 public static class OverlayPushPatch
 {
