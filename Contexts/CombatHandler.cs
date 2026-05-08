@@ -23,6 +23,7 @@ using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Hooks;
+using NeuroSdk.Messages.Outgoing;
 
 namespace Sts2Agent.Contexts;
 
@@ -280,7 +281,9 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         if (!_invalidatedActions.Contains("end_turn"))
             commands.Add(new("end_turn", "Ends your current turn"));
 
-        return new CommandReturn(commands, true, ForceText: prompt.ToString(), DontAutomaticallyExecute: true);
+        //If there is only one command, make the priority a bit higher so it doesn't take too long to execute.
+        ActionsForce.Priority priority = commands.Count <= 1 ? ActionsForce.Priority.Medium : ActionsForce.Priority.Low;
+        return new CommandReturn(commands, true, ForceText: prompt.ToString(), DontAutomaticallyExecute: true, ForcePriority: priority);
     }
 
 
@@ -577,9 +580,19 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         }
         try
         {
+            var cardPlayPrediction = CardPlayPrediction.Predict(root.Card);
+            if (cardPlayPrediction.MayChangeContext)
+            {
+                Plugin.LogDebug($"CardPlayPrediction: {root.Card.Id.Entry} may switch context to {cardPlayPrediction.Context}");
+                ActionQueue.Clear();
+                NeuroIntegration.UnregisterAllActions();
+            }
+
             var played = root.Card.TryManualPlay(root.Target);
             if (!played)
                 return ExecutionResult.Failure($"Card play was rejected by the game");
+            if (cardPlayPrediction.MayChangeContext)
+                await Task.Delay(500); // Longer delay if the card may change context to allow the new context to exist
 
         }
         catch (Exception e)
