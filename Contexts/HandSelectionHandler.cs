@@ -116,7 +116,7 @@ public class HandSelectionHandler : IContextHandler<HandSelectionHandler.Result>
         if (player != null)
             forceText.AppendLine(TextHelper.GetAvailableCardsActionText(player, true));
 
-        return new CommandReturn(commands, ForceText: forceText.ToString());
+        return new CommandReturn(commands, ForceText: forceText.ToString(), ForcePriority: NeuroSdk.Messages.Outgoing.ActionsForce.Priority.Medium);
     }
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
