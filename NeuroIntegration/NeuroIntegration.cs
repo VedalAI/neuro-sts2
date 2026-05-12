@@ -198,7 +198,7 @@ public class NeuroIntegration : Node
     if (handler.GetCommands(ctx) is CommandReturn CommandsList)
     {
       var contextReturn = handler.GetContext(ctx);
-      if (CommandsList.Commands.Count == 0)
+      if (CommandsList.Commands == null || CommandsList.Commands.Count == 0)
       {
         if (!string.IsNullOrEmpty(contextReturn.Message))
           SendContext(contextReturn.Message, contextReturn.Silent);
@@ -215,6 +215,8 @@ public class NeuroIntegration : Node
           SendContext(contextReturn.Message, contextReturn.Silent);
         Plugin.LogDebug("Only one command without parameters, enqueuing directly");
         UnregisterAllActions();
+        GameStabilityDetector.ResetWasStable();
+        GodotMainThread.RunAsync(async () => { await Task.Delay(200); GameStabilityDetector.ScheduleStabilityCheck(); });
         return;
       }
       if (!CommandsList.Persistent)

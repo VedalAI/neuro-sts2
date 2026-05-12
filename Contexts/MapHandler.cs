@@ -45,12 +45,6 @@ public class MapHandler : IContextHandler<MapHandler.Result>
     {
         var commands = new List<ConstructedAction>();
         if (ctx.AvailableMapNodes == null) return new CommandReturn();
-        if (ctx.AvailableMapNodes.Count == 1)
-        {
-            ActionExecutor.EnqueueAction(new ConstructedAction("select_first_node", ""));
-            NeuroIntegration.SendContext("Open map, Only a single travel point available, Moving to: " + GetMapPointName(ctx.AvailableMapNodes[0].PointType) + " Room , Automatically", true);
-            return new();
-        }
         if (Plugin.IsMultiplayer())
         {
             var ms = NMapScreen.Instance;
@@ -58,7 +52,13 @@ public class MapHandler : IContextHandler<MapHandler.Result>
             if (ms == null || player == null || (ms.PlayerVoteDictionary.TryGetValue(player, out var vote) && vote != null))
                 return new CommandReturn();
         }
-
+        //This doesn't work in multiplayer
+        if (ctx.AvailableMapNodes.Count == 1)
+        {
+            ActionExecutor.EnqueueAction(new ConstructedAction("select_first_node", ""));
+            NeuroIntegration.SendContext("Open map, Only a single travel point available, Moving to: " + GetMapPointName(ctx.AvailableMapNodes[0].PointType) + " Room , Automatically", true);
+            return new();
+        }
 
         commands.Add(new("select_map_node", "Select a point to travel to", QJS.WrapObject(new Dictionary<string, JsonSchema>
         {
@@ -88,6 +88,7 @@ public class MapHandler : IContextHandler<MapHandler.Result>
         {
             if (ctx.AvailableMapNodes == null || ctx.AvailableMapNodes.Count == 0)
                 return ExecutionResult.Unstable("No available map nodes to select");
+            Plugin.Log("Validating single available map node selection");
             var target = ctx.AvailableMapNodes[0];
             var mapPointNodes = UiHelper.FindAll<NMapPoint>(sceneRoot);
             var targetNode = mapPointNodes.FirstOrDefault(mp =>
@@ -95,6 +96,8 @@ public class MapHandler : IContextHandler<MapHandler.Result>
 
             if (targetNode == null)
                 return ExecutionResult.Failure($"Map node UI element not found for ({target.coord.row}, {target.coord.col})");
+            Plugin.Log("Only one map node available, automatically selecting it");
+
             Plugin.Log($"Automatically selected the only available map node ({target.coord.row}, {target.coord.col})");
             parsedData.Target = targetNode;
             return ExecutionResult.Success();
