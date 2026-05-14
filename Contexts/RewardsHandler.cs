@@ -78,16 +78,13 @@ public class RewardsHandler : AbstractQueuedHandler<RewardsHandler.Result>, IOnC
             commands.Add(new("collect_all", "Collect all rewards. This is the same as claiming each reward one by one, but a lot faster. Prefer using this over the claim_reward tool. Use this is you want to quickly collect all rewards. You will still be prompted to select cards if there are card rewards"));
         }
         bool persistent = true;
-
-        var proceedButton = UiHelper.FindFirst<NProceedButton>((Node)rewardsScreen);
-        if (proceedButton?.IsEnabled == true)
-            if (rewardEntries.Count > 0)
-                commands.Add(new("skip_rewards", "Skip any unclaimed rewards. Be sure to collect the ones you want first."));
-            else
-            {
-                commands.Add(new("proceed", "Proceed from the rewards room"));
-                persistent = false;
-            }
+        if (rewardEntries.Count > 0)
+            commands.Add(new("skip_rewards", "Skip any unclaimed rewards. Be sure to collect the ones you want first."));
+        else
+        {
+            commands.Add(new("proceed", "Proceed from the rewards room"));
+            persistent = false;
+        }
 
         return new CommandReturn(commands, persistent, ForceText: forceText.ToString());
     }
@@ -213,8 +210,8 @@ public class RewardsHandler : AbstractQueuedHandler<RewardsHandler.Result>, IOnC
         else
         {
             var button = UiHelper.FindFirst<NProceedButton>(rewardsScreen);
-            if (button == null)
-                return ExecutionResult.Failure("No proceed button found");
+            if (button == null || !button.IsEnabled)
+                return ExecutionResult.Failure("Couldn't proceed, You might have rewards that need to be claimed first");
             result.Button = button;
         }
         return ExecutionResult.Success();
