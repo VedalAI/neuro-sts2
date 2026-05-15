@@ -105,7 +105,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         if (!afterPlayed)
         {
             stringBuilder.AppendLine();
-            stringBuilder.AppendLine("Block is only preserved for this turn, It does not stay between turns unless a specific card or relic effect says otherwise. Keep this in mind when deciding whether to play defensive cards or not.");
+            stringBuilder.AppendLine("Any Block is only preserved for a single turn, It does not stay between turns unless a specific card or relic effect says otherwise. Keep this in mind when deciding whether to play defensive cards or not.");
             stringBuilder.AppendLine();
         }
         stringBuilder.AppendLine($"# You currently have {player.Creature.CurrentHp} HP out of {player.Creature.MaxHp} max HP and {player.Creature.Block} Block");
