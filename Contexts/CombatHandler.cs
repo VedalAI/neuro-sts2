@@ -102,6 +102,12 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
                 }
             }
         }
+        if (!afterPlayed)
+        {
+            stringBuilder.AppendLine();
+            stringBuilder.AppendLine("Block is only preserved for this turn, It does not stay between turns unless a specific card or relic effect says otherwise. Keep this in mind when deciding whether to play defensive cards or not.");
+            stringBuilder.AppendLine();
+        }
         stringBuilder.AppendLine($"# You currently have {player.Creature.CurrentHp} HP out of {player.Creature.MaxHp} max HP and {player.Creature.Block} Block");
         if (player.Creature.Powers.Count > 0)
         {
@@ -287,6 +293,8 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
     }
 
 
+    bool EndTurnConfirmationAsked = false;
+
     public override ExecutionResult Validate(ConstructedAction action, ActionJData data, Result parsedData, ContextInfo ctx)
     {
 
@@ -317,6 +325,11 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         {
             if (cm.IsPlayerReadyToEndTurn(player))
                 return ExecutionResult.Failure("Turn already ended");
+            if (!EndTurnConfirmationAsked && pcs.Hand.Cards.Any(card => card.CanPlay()))
+            {
+                EndTurnConfirmationAsked = true;
+                return ExecutionResult.Unstable("Are you sure you want to end your turn? You still have cards that can be played or energy/stars that can be spent. If you are sure, please choose the end_turn action again.");
+            }
             if (!IsRevalidation)
                 NeuroIntegration.UnregisterAllActions();
             return ExecutionResult.Success();
@@ -622,6 +635,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
             new MegaCrit.Sts2.Core.GameActions.EndPlayerTurnAction(player, roundNumber));
 
         NeuroIntegration.SendContext("Your turn has ended. Please wait for the next turn before playing anymore cards or calling any tools", true);
+        EndTurnConfirmationAsked = false;
         Plugin.Log("Ended turn");
         firstContext = true;
         await Task.Delay(200); // Small delay to make it a better viewing experience
