@@ -27,6 +27,15 @@ export NEURO_SDK_WS_URL=ws://127.0.0.1:8000
 
 When the game starts, the mod initializes `NeuroSdkSetup`, opens the websocket connection, registers available actions, and begins sending context / force messages to the connected controller.
 
+## Command Line arguments
+
+The mod has following Commandline arguments that can be passed as launch options for controlling Multiplayer behaviour:
+
+- "--multiplayer-host" - Starts the mod as a Multiplayer Host, continues any previous runs if they exist
+- "--multiplayer-host-abandon" - Starts the mod as a Multiplayer Host, abandons any previous runs if they exist. This should be run between play sessions.
+- "--multiplayer-join arg1" - Starts the mod as a Multiplayer Client, Tries to join a host with the Steam user name `arg1`.
+- "--multiplayer-join-any" - Starts the mod as a Multiplayer Client, Tries to join any available host. This should be preferred as its unlikely other users are in a multiplayer lobby
+
 ## Installation
 
 1. Build the mod from this repository.
