@@ -14,6 +14,8 @@ using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 using System.Text;
 using MegaCrit.Sts2.Core.Context;
+using MegaCrit.Sts2.Core.Nodes.Multiplayer;
+using MegaCrit.Sts2.Core.Nodes.Combat;
 
 namespace Sts2Agent.Contexts;
 
@@ -102,6 +104,7 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
         }
     }
 
+    //TODO: (Multiplayer) Mend option requires a second click on the other player
     public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
 
     {
@@ -129,6 +132,27 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
             }
         }
         // GameStabilityDetector.ResetWasStable();
+        if (action.Name.EndsWith("mend"))
+        {
+            var players = UiHelper.FindAll<NMultiplayerPlayerState>(SceneHelper.GetSceneRoot()).Where(p => p.Player != LocalContext.GetMe(ctx.RunState.Players)).ToList();
+            var targetHelper = NTargetManager.Instance;
+            Plugin.Log($"Found {players.Count} player states in the scene.");
+            foreach (var p in players)
+            {
+                if (targetHelper.AllowedToTargetNode(p))
+                {
+                    Plugin.Log($"Found a valid target for mend: {p.Name}");
+                    targetHelper.EmitSignal(NTargetManager.SignalName.NodeHovered, p);
+                    targetHelper.OnNodeHovered(p);
+                    targetHelper.CallThreadSafe(NTargetManager.MethodName.FinishTargeting, false);
+                    targetHelper.CancelTargeting();
+                    break;
+                }
+
+            }
+
+
+        }
 
         return ExecutionResult.Success("Rest option selected");
     }

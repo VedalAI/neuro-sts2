@@ -15,6 +15,7 @@ using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 using System.Text;
 using MegaCrit.Sts2.Core.Context;
+using MegaCrit.Sts2.Core.Platform;
 
 namespace Sts2Agent.Contexts;
 
@@ -35,6 +36,15 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
         var timelineButton = mainMenu.Get(NMainMenu.PropertyName._timelineButton).As<NMainMenuTextButton>();
         var notification = mainMenu.Get(NMainMenu.PropertyName._timelineNotificationDot).As<Control>();
 
+        if (Plugin.WantsMultiplayer())
+        {
+            stringBuilder.AppendLine("Multiplayer mode is enabled. Automatically navigating to multiplayer lobby");
+            var mpButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/MultiplayerButton");
+            if (mpButton != null && mpButton.IsEnabled)
+            {
+                return new ContextReturn(stringBuilder.ToString(), false);
+            }
+        }
         if (notification.Visible && timelineButton.IsEnabled)
         {
             stringBuilder.AppendLine("You have an unseen epoch to unlock. Automatically unlocking it now");
@@ -70,17 +80,27 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
         var mainMenu = sceneRoot != null ? UiHelper.FindFirst<NMainMenu>(sceneRoot) : null;
         if (mainMenu == null) return new CommandReturn();
 
-        if (SaveManager.Instance.HasRunSave)
+        if (Plugin.WantsMultiplayer())
         {
-            var continueBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton");
-            if (continueBtn != null && continueBtn.IsEnabled)
-                commands.Add(new ConstructedAction("continue_run", "Continue your last run"));
+            var mpButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/MultiplayerButton");
+            if (mpButton != null && mpButton.IsEnabled)
+                commands.Add(new ConstructedAction("multiplayer", "Go to multiplayer lobby"));
         }
         else
         {
-            var spButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton");
-            if (spButton != null && spButton.IsEnabled)
-                commands.Add(new ConstructedAction("start_run", "Start a new run"));
+
+            if (SaveManager.Instance.HasRunSave)
+            {
+                var continueBtn = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/ContinueButton");
+                if (continueBtn != null && continueBtn.IsEnabled)
+                    commands.Add(new ConstructedAction("continue_run", "Continue your last run"));
+            }
+            else
+            {
+                var spButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton");
+                if (spButton != null && spButton.IsEnabled)
+                    commands.Add(new ConstructedAction("start_run", "Start a new run"));
+            }
         }
 
         var timelineButton = mainMenu.Get(NMainMenu.PropertyName._timelineButton).As<NMainMenuTextButton>();
@@ -119,6 +139,15 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
                 }
                 else
                     return ExecutionResult.ModFailure("Can't abandon a run when no previous run exists");
+            case "multiplayer":
+                var mpButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/MultiplayerButton");
+                if (mpButton != null && mpButton.IsEnabled)
+                {
+                    parsedData.Button = mpButton;
+                    return ExecutionResult.Success();
+                }
+                else
+                    return ExecutionResult.ModFailure("Multiplayer button is not available or not enabled");
             case "start_run":
                 var spButton = mainMenu.GetNode<NClickableControl>("MainMenuTextButtons/SingleplayerButton");
                 if (spButton != null && spButton.IsEnabled)
@@ -228,6 +257,112 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
             }
 
             return ExecutionResult.Failure("Timed out waiting for character select screen");
+        }
+        if (action.Name == "multiplayer")
+        {
+            await GodotMainThread.ClickAsync(result.Button);
+            await Task.Delay(500);
+
+            var mpSubmenu = await GodotMainThread.RunAsync(() => UiHelper.FindFirst<NMultiplayerSubmenu>(sceneRoot));
+            if (mpSubmenu == null || !mpSubmenu.Visible)
+                return ExecutionResult.Unstable("Multiplayer submenu not found");
+
+            await Task.Delay(500);
+
+            if (Plugin.Multiplayer.WantsHost)
+            {
+                Plugin.Log("Navigated to multiplayer lobby as host");
+                if (Plugin.Multiplayer.WantsHostAbandonSave)
+                {
+                    var abandonButton = mpSubmenu.GetNode<NSubmenuButton>("ButtonContainer/AbandonButton");
+                    if (abandonButton != null && abandonButton.IsEnabled && abandonButton.IsVisibleInTree())
+                    {
+                        await GodotMainThread.ClickAsync(abandonButton);
+                        await Task.Delay(500);
+                        Plugin.Log("Abandoned existing run from multiplayer submenu");
+                    }
+                }
+                var loadButton = mpSubmenu.GetNode<NSubmenuButton>("ButtonContainer/LoadButton");
+                Plugin.Log($"Load button found: {loadButton != null}, enabled: {loadButton?.IsEnabled}");
+                if (loadButton != null && loadButton.IsEnabled && loadButton.IsVisibleInTree())
+                {
+                    await GodotMainThread.ClickAsync(loadButton);
+                    await Task.Delay(500);
+                    return ExecutionResult.Success("Loaded existing multiplayer run");
+                }
+                var newButton = mpSubmenu.GetNode<NSubmenuButton>("ButtonContainer/HostButton");
+                Plugin.Log($"Host button found: {newButton != null}, enabled: {newButton?.IsEnabled}");
+                if (newButton != null && newButton.IsEnabled && newButton.IsVisibleInTree())
+                {
+                    await GodotMainThread.ClickAsync(newButton);
+                    await Task.Delay(500);
+                    var newSubMenu = await GodotMainThread.RunAsync(() => UiHelper.FindFirst<NMultiplayerHostSubmenu>(sceneRoot));
+                    if (newSubMenu == null || !newSubMenu.Visible)
+                        return ExecutionResult.Failure("Multiplayer host submenu not found");
+                    var stdButton = await GodotMainThread.RunAsync(() => newSubMenu.GetNode<NClickableControl>("StandardButton"));
+                    if (stdButton == null)
+                        return ExecutionResult.Failure("Standard button not found");
+
+                    await GodotMainThread.ClickAsync(stdButton);
+
+                    // Wait for character select screen to appear
+                    for (int i = 0; i < 30; i++)
+                    {
+                        await Task.Delay(100);
+                        var cs = await GodotMainThread.RunAsync(() =>
+                            UiHelper.FindFirst<NCharacterSelectScreen>(sceneRoot));
+                        if (cs != null && cs.Visible)
+                        {
+                            Plugin.Log("Navigated to character select via singleplayer submenu");
+                            await Task.Delay(100);
+
+                            return ExecutionResult.Success("Navigated to character select");
+                        }
+                    }
+
+                    return ExecutionResult.Success("Started new multiplayer run");
+                }
+                //Check if we have a running run and if so, click the "Host with current run" button
+                return ExecutionResult.Success("Navigated to multiplayer lobby as host");
+            }
+            else if (Plugin.Multiplayer.WantsJoin)
+            {
+                Plugin.Log("Navigated to multiplayer lobby as joiner");
+                var joinButton = mpSubmenu.GetNode<NSubmenuButton>("ButtonContainer/JoinButton");
+                if (joinButton != null && joinButton.IsEnabled)
+                {
+                    await GodotMainThread.ClickAsync(joinButton);
+                    await Task.Delay(500);
+                    var joinSubMenu = await GodotMainThread.RunAsync(() => UiHelper.FindFirst<NJoinFriendScreen>(sceneRoot));
+                    if (joinSubMenu == null || !joinSubMenu.Visible)
+                        return ExecutionResult.Failure("Join friend screen not found");
+
+                    var buttonsContainer = joinSubMenu.GetNode<Control>("%ButtonContainer");
+                    if (buttonsContainer == null || !buttonsContainer.Visible)
+                        return ExecutionResult.Failure("Buttons container not found in join friend screen");
+                    var refreshButton = joinSubMenu.GetNode<NJoinFriendRefreshButton>("%RefreshButton");
+                    if (refreshButton == null || !refreshButton.IsEnabled)
+                        return ExecutionResult.Failure("Refresh button not found or not enabled in join friend screen");
+
+                    NJoinFriendButton? targetButton = null;
+
+                    while (targetButton == null)
+                    {
+                        Plugin.Log("Looking for joinable friend buttons...");
+                        await Task.Delay(5000);
+                        targetButton = buttonsContainer.GetChildren().OfType<NJoinFriendButton>()
+                            .FirstOrDefault(b => Plugin.Multiplayer.JoinName == null || PlatformUtil.GetPlayerName(PlatformUtil.PrimaryPlatform, b.PlayerId) == Plugin.Multiplayer.JoinName);
+                        if (targetButton == null)
+                            await GodotMainThread.ClickAsync(refreshButton);
+                    }
+
+                    await GodotMainThread.ClickAsync(targetButton);
+
+                    return ExecutionResult.Success("Joined multiplayer run");
+                }
+                return ExecutionResult.Unstable("Join button not found or disabled");
+            }
+            return ExecutionResult.Unstable("Unknown multiplayer state");
         }
         if (action.Name == "view_timeline")
         {

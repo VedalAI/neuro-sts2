@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Extensions;
 using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Runs;
@@ -22,6 +23,19 @@ public enum LogLevel
 [ModInitializer("Initialize")]
 public static class Plugin
 {
+
+    public struct MultiplayerState
+    {
+        public bool WantsHost = false;
+        public bool WantsHostAbandonSave = false;
+        public bool WantsJoin = false;
+        public string? JoinName = null;
+
+
+        public MultiplayerState()
+        {
+        }
+    }
     public static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         "sts2agent.log");
@@ -34,6 +48,7 @@ public static class Plugin
     {
         try
         {
+            MultiplayerParse();
             _harmony = new Harmony("neuro-sts2");
             _harmony.PatchAll(typeof(Plugin).Assembly);
 
@@ -64,7 +79,43 @@ public static class Plugin
         }
     }
 
+    private static void MultiplayerParse()
+    {
+
+        var cmdlines = Godot.OS.GetCmdlineArgs();
+        foreach (var item in cmdlines)
+        {
+            Log($"Command line argument: {item}");
+        }
+        if (cmdlines.Contains("--multiplayer-host-abandon"))
+        {
+            Multiplayer = new MultiplayerState { WantsHost = true, WantsHostAbandonSave = true };
+            return;
+        }
+        if (cmdlines.Contains("--multiplayer-host"))
+        {
+            Multiplayer = new MultiplayerState { WantsHost = true };
+            return;
+        }
+        if (cmdlines.Contains("--multiplayer-join"))
+        {
+            var joinindex = cmdlines.IndexOf("--multiplayer-join");
+            var joinName = joinindex + 1 < cmdlines.Length ? cmdlines[joinindex + 1] : null;
+            Multiplayer = new MultiplayerState { WantsJoin = true, JoinName = joinName };
+            return;
+        }
+        if (cmdlines.FirstOrDefault(arg => arg.StartsWith("--multiplayer-join-any")) != null)
+        {
+            Multiplayer = new MultiplayerState { WantsJoin = true, JoinName = null };
+            return;
+        }
+    }
+
     public static bool IsMultiplayer() => RunManager.Instance?.NetService?.Type.IsMultiplayer() ?? false;
+
+    public static MultiplayerState Multiplayer { get; private set; }
+
+    public static bool WantsMultiplayer() => Multiplayer.WantsHost || Multiplayer.WantsJoin;
 
     public static void Log(string message) => Log(LogLevel.Info, message);
     public static void LogDebug(string message) => Log(LogLevel.Debug, message);
