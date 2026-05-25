@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.AutoSlay.Helpers;
@@ -21,6 +22,10 @@ namespace Sts2Agent.Contexts;
 
 public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
 {
+    private const BindingFlags NonPublicInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+    private static readonly MethodInfo? FinishTargetingMethod =
+        typeof(NTargetManager).GetMethod("FinishTargeting", NonPublicInstance);
+
     public class Result : IContextResult
     {
         internal NRestSiteButton SelectedOption;
@@ -112,6 +117,7 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
         if (result.SelectedOption == null || !result.SelectedOption.IsVisibleInTree()) return ExecutionResult.ModFailure("The selected option is invalid");
 
 
+        var isMend = action.Name.EndsWith("mend", StringComparison.OrdinalIgnoreCase);
         await GodotMainThread.ClickAsync(result.SelectedOption);
         // Wait for the animation to finish: proceed button becomes enabled or an overlay appears
         // (e.g., Smith opens card selection). Mirrors the game's AutoSlay RestSiteRoomHandler logic.
@@ -123,6 +129,11 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
                 await Task.Delay(250);
                 var ready = await GodotMainThread.RunAsync(() =>
                 {
+                    if (isMend)
+                    {
+                        return NTargetManager.Instance.IsInSelection;
+                    }
+
                     if (nRoom.ProceedButton?.IsEnabled == true) return true;
                     var overlay = NOverlayStack.Instance;
                     if (overlay != null && overlay.ScreenCount > 0) return true;
@@ -132,26 +143,35 @@ public class RestSiteHandler : IContextHandler<RestSiteHandler.Result>
             }
         }
         // GameStabilityDetector.ResetWasStable();
-        if (action.Name.EndsWith("mend"))
+        if (isMend)
         {
-            var players = UiHelper.FindAll<NMultiplayerPlayerState>(SceneHelper.GetSceneRoot()).Where(p => p.Player != LocalContext.GetMe(ctx.RunState.Players)).ToList();
-            var targetHelper = NTargetManager.Instance;
-            Plugin.Log($"Found {players.Count} player states in the scene.");
-            foreach (var p in players)
+            await Task.Delay(200);
+            await GodotMainThread.RunAsync(() =>
             {
-                if (targetHelper.AllowedToTargetNode(p))
+                var sceneRoot = SceneHelper.GetSceneRoot();
+                if (sceneRoot == null)
                 {
-                    Plugin.Log($"Found a valid target for mend: {p.Name}");
-                    targetHelper.EmitSignal(NTargetManager.SignalName.NodeHovered, p);
-                    targetHelper.OnNodeHovered(p);
-                    targetHelper.CallThreadSafe(NTargetManager.MethodName.FinishTargeting, false);
-                    targetHelper.CancelTargeting();
-                    break;
+                    return;
                 }
 
-            }
+                var players = UiHelper.FindAll<NMultiplayerPlayerState>(sceneRoot)
+                    .Where(p => p.Player != LocalContext.GetMe(ctx.RunState.Players))
+                    .ToList();
+                var targetHelper = NTargetManager.Instance;
+                Plugin.Log($"Found {players.Count} player states in the scene.");
+                foreach (var p in players)
+                {
+                    if (!targetHelper.AllowedToTargetNode(p))
+                    {
+                        continue;
+                    }
 
-
+                    Plugin.Log($"Found a valid target for mend: {p.Name}");
+                    targetHelper.OnNodeHovered(p);
+                    FinishTargetingMethod?.Invoke(targetHelper, [false]);
+                    break;
+                }
+            });
         }
 
         return ExecutionResult.Success("Rest option selected");
