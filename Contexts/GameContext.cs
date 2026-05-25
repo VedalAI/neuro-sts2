@@ -103,7 +103,7 @@ public class ContextInfo : IEqualityComparer<ContextInfo>
             { Type: ContextType.Combat } => x.CombatState != null && y.CombatState != null && x.CombatState == y.CombatState,
             { Type: ContextType.Event } => x.EventRoom != null && y.EventRoom != null && x.EventRoom == y.EventRoom && x.EventRoom.CanonicalEvent == y.EventRoom.CanonicalEvent,
             { Type: ContextType.RestSite } => x.RestSiteRoom != null && y.RestSiteRoom != null && x.RestSiteRoom == y.RestSiteRoom && x.RestSiteRoom.Options == y.RestSiteRoom.Options,
-            { Type: ContextType.Shop } => x.MerchantRoom != null && y.MerchantRoom != null && x.MerchantRoom == y.MerchantRoom && x.MerchantRoom.Inventory.AllEntries == y.MerchantRoom.Inventory.AllEntries,
+            { Type: ContextType.Shop } => x.MerchantRoom != null && y.MerchantRoom != null && x.MerchantRoom == y.MerchantRoom && x.MerchantRoom.GetLocalInventory().AllEntries == y.MerchantRoom.GetLocalInventory().AllEntries,
             { Type: ContextType.BundleSelection } => x.BundleScreen != null && y.BundleScreen != null && x.BundleScreen == y.BundleScreen && x.Bundles != null && y.Bundles != null && x.Bundles.SequenceEqual(y.Bundles),
             { Type: ContextType.GameOver } => true, // Game over context is determined by run state, which is already checked by reference equality in RunState
             { Type: ContextType.CrystalBallEvent } => GodotObject.IsInstanceValid(x.CrystalSphereScreen) && GodotObject.IsInstanceValid(y.CrystalSphereScreen) && x.CrystalSphereScreen == y.CrystalSphereScreen,
@@ -127,7 +127,7 @@ public class ContextInfo : IEqualityComparer<ContextInfo>
             ContextType.Combat => obj.CombatState != null ? obj.CombatState.GetHashCode() : 0,
             ContextType.Event => obj.EventRoom != null ? HashCode.Combine(obj.EventRoom.GetHashCode(), obj.EventRoom.CanonicalEvent.GetHashCode()) : 0,
             ContextType.RestSite => obj.RestSiteRoom != null ? HashCode.Combine(obj.RestSiteRoom.GetHashCode(), obj.RestSiteRoom.Options.GetHashCode()) : 0,
-            ContextType.Shop => obj.MerchantRoom != null ? HashCode.Combine(obj.MerchantRoom.GetHashCode(), obj.MerchantRoom.Inventory.AllEntries.GetHashCode()) : 0,
+            ContextType.Shop => obj.MerchantRoom != null ? HashCode.Combine(obj.MerchantRoom.GetHashCode(), obj.MerchantRoom.GetLocalInventory().AllEntries.GetHashCode()) : 0,
             ContextType.BundleSelection => obj.BundleScreen != null && obj.Bundles != null ? HashCode.Combine(obj.BundleScreen.GetHashCode(), obj.Bundles.Aggregate(0, (acc, b) => acc ^ b.GetHashCode())) : 0,
             ContextType.GameOver => obj.RunState != null ? obj.RunState.GetHashCode() : 0,
             ContextType.CrystalBallEvent => GodotObject.IsInstanceValid(obj.CrystalSphereScreen) ? obj.CrystalSphereScreen.GetHashCode() : 0,
@@ -332,7 +332,7 @@ public static class GameContext
 
         if (room is MerchantRoom shopRoom)
         {
-            var inv = shopRoom.Inventory;
+            var inv = shopRoom.GetLocalInventory();
             var nRoom = MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom.Instance;
             bool isOpen = nRoom?.Inventory?.IsOpen == true;
 
