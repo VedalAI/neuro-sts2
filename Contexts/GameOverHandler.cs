@@ -108,6 +108,7 @@ public class GameOverHandler : IContextHandler<GameOverHandler.GameOverResult>
             NeuroIntegration.SendContext(BuildGameOverContext());
             await GodotMainThread.ClickAsync(mainMenuBtn);
             Plugin.Log("Clicked return to main menu on game over screen");
+            GameStabilityDetector.AddDelayBeforeNextCheck(30);
             return ExecutionResult.Success("Returning to main menu");
         }
     }
