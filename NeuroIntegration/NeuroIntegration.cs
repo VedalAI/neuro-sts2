@@ -45,7 +45,16 @@ public class NeuroIntegration : Node
 
   public new void Ready()
   {
-    Context.Send("You are playing Slay the Spire 2");
+    if (Plugin.WantsMultiplayer())
+    {
+
+      Context.Send("You are playing Slay the Spire 2 in Multiplayer! be sure to help out your teammates and conquer the spire together!");
+    }
+    else
+    {
+
+      Context.Send("You are playing Slay the Spire 2! be ready o conquer the spire and try your best to get the best deck and relic combination possible!");
+    }
   }
 
   public void Process()
