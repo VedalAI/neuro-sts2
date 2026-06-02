@@ -16,6 +16,7 @@ using Sts2Agent.Utilities;
 using System.Text;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Platform;
+using MegaCrit.Sts2.Core.Helpers;
 
 namespace Sts2Agent.Contexts;
 
@@ -351,7 +352,7 @@ public class MainMenuHandler : IContextHandler<MainMenuHandler.Result>
                         Plugin.Log("Looking for joinable friend buttons...");
                         await Task.Delay(5000);
                         targetButton = buttonsContainer.GetChildren().OfType<NJoinFriendButton>()
-                            .FirstOrDefault(b => Plugin.Multiplayer.JoinName == null || PlatformUtil.GetPlayerName(PlatformUtil.PrimaryPlatform, b.PlayerId) == Plugin.Multiplayer.JoinName);
+                            .FirstOrDefault(b => Plugin.Multiplayer.JoinName == null || StringHelper.Slugify(PlatformUtil.GetPlayerName(PlatformUtil.PrimaryPlatform, b.PlayerId)) == StringHelper.Slugify(Plugin.Multiplayer.JoinName));
                         if (targetButton == null)
                             await GodotMainThread.ClickAsync(refreshButton);
                     }
