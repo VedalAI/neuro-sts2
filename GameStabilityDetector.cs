@@ -123,6 +123,12 @@ public static class GameStabilityDetector
         ScheduleStabilityCheck();
     }
 
+    public static void AddDelayBeforeNextCheck(int seconds)
+    {
+        Plugin.LogDebug($"Adding delay of {seconds} seconds before next stability check can pass");
+        _waitTimeBeforeNextCheck = seconds;
+        TimeSinceLastCheck = 0;
+    }
     public static void ScheduleStabilityCheck()
     {
         if (_pendingCheck) return;

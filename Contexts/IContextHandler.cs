@@ -46,10 +46,18 @@ public interface IContextHandler<T> : IContextHandler where T : class, new()
 
     Task<ExecutionResult?> IContextHandler.Internal_TryExecute(ConstructedAction action, object ParsedData, ContextInfo ctx)
     {
-        Plugin.LogDebug("Executing " + action.Name + $"in type: {Type}, {this}");
-        Plugin.LogDebug($"ParsedData runtime type: {ParsedData?.GetType()}");
-        Plugin.LogDebug($"Expected type: {typeof(T)}");
-        return TryExecute(action, (T)ParsedData, ctx);
+        try
+        {
+            Plugin.LogDebug("Executing " + action.Name + $"in type: {Type}, {this}");
+            Plugin.LogDebug($"ParsedData runtime type: {ParsedData?.GetType()}");
+            Plugin.LogDebug($"Expected type: {typeof(T)}");
+            return TryExecute(action, (T)ParsedData, ctx);
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult<ExecutionResult?>(ExecutionResult.Unstable($"Exception during execution: {ex.Message}"));
+        }
+
     }
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, T parsedData, ContextInfo ctx);
     public Task<ExecutionResult?> TryExecute(ConstructedAction action, T ParsedData, ContextInfo ctx);
