@@ -17,6 +17,7 @@ using System.Text;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Platform;
 using MegaCrit.Sts2.Core.Helpers;
+using SceneHelper = Sts2Agent.Utilities.SceneHelper;
 
 namespace Sts2Agent.Contexts;
 
