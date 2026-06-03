@@ -38,7 +38,7 @@ namespace NeuroSdk.Actions
             return result;
         }
 
-        protected sealed override void Execute(object? parsedData) => Execute((TData?) parsedData);
+        protected sealed override void Execute(object? parsedData) => Execute((TData?)parsedData);
     }
 
     /// <summary>

@@ -45,8 +45,8 @@ namespace NeuroSdk.Messages.API
             return result;
         }
 
-        void IIncomingMessageHandler.ReportResult(object? parsedData, ExecutionResult result) => ReportResult((T?) parsedData, result);
+        void IIncomingMessageHandler.ReportResult(object? parsedData, ExecutionResult result) => ReportResult((T?)parsedData, result);
 
-        void IIncomingMessageHandler.Execute(object? parsedData) => Execute((T?) parsedData);
+        void IIncomingMessageHandler.Execute(object? parsedData) => Execute((T?)parsedData);
     }
 }
