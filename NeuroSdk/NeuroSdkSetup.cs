@@ -11,6 +11,7 @@ using NeuroSdk.Actions;
 using NeuroSdk.Messages.Outgoing;
 using NeuroSdk.Websocket;
 using Sts2Agent;
+using MegaCrit.Sts2.Core.Saves;
 
 namespace NeuroSdk
 {
@@ -60,6 +61,16 @@ namespace NeuroSdk
         public static WebsocketConnection? WebsocketInstance;
         public static void Initialize(Node Root, string game)
         {
+            SaveManager.Instance.SetFtuesEnabled(enabled: false);
+            SaveManager.Instance.SettingsSave.SeenEaDisclaimer = true;
+
+            if (!SaveManager.Instance.SeenFtue("accept_tutorials_ftue"))
+            {
+                SaveManager.Instance.MarkFtueAsComplete("accept_tutorials_ftue");
+            }
+            SaveManager.Instance.MarkFtueAsComplete("multiplayer_warning");
+            SaveManager.Instance.SaveSettings();
+
             var neuroSDKNode = new Node();
 
             var MainLoop = Engine.GetMainLoop();

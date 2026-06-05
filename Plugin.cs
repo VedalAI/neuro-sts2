@@ -7,6 +7,7 @@ using MegaCrit.Sts2.Core.Extensions;
 using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Saves;
 using NeuroSdk;
 using NeuroSdk.Messages.Outgoing;
 
@@ -51,6 +52,17 @@ public static class Plugin
             MultiplayerParse();
             _harmony = new Harmony("neuro-sts2");
             _harmony.PatchAll(typeof(Plugin).Assembly);
+            SaveManager.Instance.InitProfileId();
+
+            SaveManager.Instance.SetFtuesEnabled(enabled: false);
+            SaveManager.Instance.SettingsSave.SeenEaDisclaimer = true;
+            if (!SaveManager.Instance.SeenFtue("accept_tutorials_ftue"))
+            {
+                SaveManager.Instance.MarkFtueAsComplete("accept_tutorials_ftue");
+            }
+            SaveManager.Instance.MarkFtueAsComplete("multiplayer_warning");
+
+            SaveManager.Instance.SaveSettings();
 
             Godot.Bridge.ScriptManagerBridge.LookupScriptsInAssembly(Assembly.GetExecutingAssembly());
 

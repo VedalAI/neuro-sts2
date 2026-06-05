@@ -22,6 +22,7 @@ using MegaCrit.Sts2.Core.Nodes.Relics;
 using System.Text;
 using Sts2Agent.Contexts;
 using STS2NeuroIntegration;
+using MegaCrit.Sts2.Core.Saves;
 
 namespace Sts2Agent;
 
@@ -263,3 +264,16 @@ public static class CharacterSelectOpenedPatch
         GameStabilityDetector.OnScreenTransition();
     }
 }
+
+
+[HarmonyPatch(typeof(SaveManager), nameof(SaveManager.SeenFtue))]
+public static class SeenFtuePatch
+{
+    [HarmonyPostfix]
+    public static void Postfix(string ftueKey, ref bool __result)
+    {
+        //Always return true, we don't want any ftues
+        __result = true;
+    }
+}
+
