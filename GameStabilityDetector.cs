@@ -476,6 +476,23 @@ public static class GameStabilityDetector
                         LogDebug($"IsMultiplayerStable: map screen, travel not enabled (traveling={ms?.IsTraveling}) → false");
                     return false;
                 }
+            case ContextType.CharacterSelect:
+                {
+                    var selectScreen = ctx.CharacterSelectScreen;
+                    if (selectScreen == null || !GodotObject.IsInstanceValid(selectScreen))
+                    {
+                        LogDebug("IsMultiplayerStable: character select screen not found → false");
+                        return false;
+                    }
+                    var localPlayer = selectScreen.Lobby.LocalPlayer;
+                    if (localPlayer.isReady)
+                    {
+                        LogDebug("IsMultiplayerStable: character select, local player ready → true, Waiting for other players");
+                        return false;
+                    }
+
+                    return true;
+                }
             default:
                 return true;
         }
