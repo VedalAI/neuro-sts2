@@ -75,6 +75,25 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         if (UiHelper.FindFirst<NTimelineTutorial>(ctx.TimelineScreen) is not null)
         {
             commands.Add(new("proceed", "Continue"));
+            return new CommandReturn(commands, true);
+        }
+
+        var inspectScreen = UiHelper.FindFirst<NEpochInspectScreen>(ctx.TimelineScreen);
+        if (inspectScreen != null && inspectScreen.Visible)
+        {
+            commands.Add(new("proceed_epoch", "Close the unlocked epoch"));
+            return new CommandReturn(commands, true);
+        }
+
+        var unlockScreen = UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
+        if (unlockScreen != null && unlockScreen.Visible)
+        {
+            var button = UiHelper.FindFirst<NUnlockConfirmButton>(unlockScreen);
+            if (button != null)
+            {
+                commands.Add(new("close_unlock", "Close the unlock screen"));
+                return new CommandReturn(commands, true);
+            }
         }
 
         var tounlockEpochs = UiHelper.FindAll<NEpochSlot>(ctx.TimelineScreen);
@@ -85,20 +104,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
             {
                 commands.Add(new("unlock_epoch", "Unlock the next obtained epoch. This gives you its rewards and story context for Slay the Spire 2."));
             }
-        }
-        var inspectScreen = UiHelper.FindFirst<NEpochInspectScreen>(ctx.TimelineScreen);
-        if (inspectScreen != null && inspectScreen.Visible)
-        {
-            commands.Add(new("proceed_epoch", "Close the unlocked epoch"));
-        }
-        var unlockScreen = UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
-        if (unlockScreen != null && unlockScreen.Visible)
-        {
-            var button = UiHelper.FindFirst<NUnlockConfirmButton>(unlockScreen);
-            if (button != null)
-            {
-                commands.Add(new("close_unlock", "Close the unlock screen"));
-            }
+            return new CommandReturn(commands, true);
         }
         var backButton = ctx.TimelineScreen.Get(NTimelineScreen.PropertyName._backButton).As<NBackButton>();
         if (backButton != null && backButton.IsEnabled && backButton.Visible)
@@ -201,6 +207,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
             {
                 FlushPendingEpochUnlock();
             }
+            await Task.Delay(500);
             return ExecutionResult.Success();
         }
         if (action.Name == "close_unlock")
@@ -221,6 +228,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
             {
                 FlushPendingEpochUnlock();
             }
+            await Task.Delay(500);
             return ExecutionResult.Success();
         }
         return null;
@@ -459,7 +467,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
 
     private static async Task WaitForUnlockScreensToFinish(ContextInfo ctx)
     {
-        for (int i = 0; i < 40; i++)
+        for (int i = 0; i < 400; i++)
         {
             NUnlockScreen? unlockScreen = UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
             if (unlockScreen == null || !unlockScreen.Visible)
