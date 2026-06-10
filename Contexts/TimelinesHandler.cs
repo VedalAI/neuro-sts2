@@ -191,11 +191,11 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         }
         if (action.Name == "unlock_epoch")
         {
-            await GodotMainThread.ClickAsync(result.EpochButton);
             if (result.EpochButton.model is EpochModel epochModel)
             {
                 _pendingEpochUnlock = new PendingEpochUnlock(epochModel);
             }
+            await GodotMainThread.ClickAsync(result.EpochButton);
             await Task.Delay(1000);// wait for the screen to fade
             return ExecutionResult.Success();
         }
@@ -214,7 +214,6 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         {
             AddUnlockEntry(result.UnlockScreen);
             await GodotMainThread.ClickAsync(result.ProceedButton);
-            await Task.Delay(1000);// wait for the screen to fade
             var nextUnlockScreen = await WaitForFollowUpUnlockScreen(ctx, result.UnlockScreen);
             if (nextUnlockScreen is NUnlockTimelineScreen)
             {
@@ -231,7 +230,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
             await Task.Delay(500);
             return ExecutionResult.Success();
         }
-        return null;
+        return ExecutionResult.Unstable("Unknown action");
     }
 
     private static T? GetFieldValue<T>(FieldInfo? field, object instance)
@@ -445,7 +444,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
     private static async Task<NUnlockScreen?> WaitForFollowUpUnlockScreen(ContextInfo ctx, NUnlockScreen closingScreen)
     {
         ulong closingScreenId = GodotObject.IsInstanceValid(closingScreen) ? closingScreen.GetInstanceId() : 0;
-        for (int i = 0; i < 20; i++)
+        for (int i = 0; i < 200; i++)
         {
             await Task.Delay(100);
             NUnlockScreen? unlockScreen = UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
@@ -461,6 +460,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
 
             return unlockScreen;
         }
+        NeuroIntegration.Unstable();
 
         return UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
     }
@@ -477,6 +477,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
 
             await Task.Delay(100);
         }
+        NeuroIntegration.Unstable();
     }
 
 }
