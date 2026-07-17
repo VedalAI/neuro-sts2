@@ -72,28 +72,30 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
     public CommandReturn GetCommands(ContextInfo ctx)
     {
         var commands = new List<ConstructedAction>();
-        if (UiHelper.FindFirst<NTimelineTutorial>(ctx.TimelineScreen) is not null)
+        if (UiHelper.FindFirst<NTimelineTutorial>(ctx.TimelineScreen) is { Visible: true } tutorial && IsTutorialReady(tutorial))
         {
             commands.Add(new("proceed", "Continue"));
             return new CommandReturn(commands, true);
         }
 
         var inspectScreen = UiHelper.FindFirst<NEpochInspectScreen>(ctx.TimelineScreen);
-        if (inspectScreen != null && inspectScreen.Visible)
+        if (inspectScreen != null && inspectScreen.Visible && IsInspectScreenReady(inspectScreen))
         {
             commands.Add(new("proceed_epoch", "Close the unlocked epoch"));
             return new CommandReturn(commands, true);
         }
 
         var unlockScreen = UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
-        if (unlockScreen != null && unlockScreen.Visible)
+        if (unlockScreen != null && unlockScreen.Visible && IsUnlockScreenReady(unlockScreen))
         {
-            var button = UiHelper.FindFirst<NUnlockConfirmButton>(unlockScreen);
-            if (button != null)
-            {
-                commands.Add(new("close_unlock", "Close the unlock screen"));
-                return new CommandReturn(commands, true);
-            }
+            commands.Add(new("close_unlock", "Close the unlock screen"));
+            return new CommandReturn(commands, true);
+        }
+
+        if (ctx.TimelineScreen.IsScreenQueued())
+        {
+            Plugin.LogDebug($" screen queue,Current State of things: InspectScreen: {inspectScreen?.Visible}, UnlockScreen: {unlockScreen?.Visible} ");
+            return new CommandReturn(commands, true);
         }
 
         var tounlockEpochs = UiHelper.FindAll<NEpochSlot>(ctx.TimelineScreen);
@@ -103,14 +105,15 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
             if (tounlock.Any())
             {
                 commands.Add(new("unlock_epoch", "Unlock the next obtained epoch. This gives you its rewards and story context for Slay the Spire 2."));
+                return new CommandReturn(commands, true);
             }
-            return new CommandReturn(commands, true);
         }
         var backButton = ctx.TimelineScreen.Get(NTimelineScreen.PropertyName._backButton).As<NBackButton>();
         if (backButton != null && backButton.IsEnabled && backButton.Visible)
         {
             commands.Add(new("back_to_main_menu", "Close the timeline and return to the main menu"));
         }
+        Plugin.LogDebug($"Current State of things: InspectScreen: {inspectScreen?.Visible}, UnlockScreen: {unlockScreen?.Visible}, BackButton: {backButton?.Visible}");
         return new CommandReturn(commands, true);
     }
 
@@ -119,7 +122,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         if (action.Name == "proceed")
         {
             var timelineTutorial = UiHelper.FindFirst<NTimelineTutorial>(SceneHelper.GetSceneRoot());
-            if (timelineTutorial != null && UiHelper.FindFirst<NAcknowledgeButton>(timelineTutorial) is NAcknowledgeButton acknowledgeButton)
+            if (timelineTutorial is { Visible: true } && UiHelper.FindFirst<NAcknowledgeButton>(timelineTutorial) is { Visible: true, IsEnabled: true } acknowledgeButton)
             {
                 result.ProceedButton = acknowledgeButton;
                 return ExecutionResult.Success();
@@ -128,6 +131,11 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         }
         if (action.Name == "unlock_epoch")
         {
+            if (!IsTimelineIdle(ctx.TimelineScreen))
+            {
+                return ExecutionResult.Unstable("Timeline is still processing an unlock");
+            }
+
             var tounlockEpochs = UiHelper.FindAll<NEpochSlot>(ctx.TimelineScreen);
             if (tounlockEpochs.Count > 0)
             {
@@ -143,7 +151,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         if (action.Name == "proceed_epoch")
         {
             var inspectScreen = UiHelper.FindFirst<NEpochInspectScreen>(ctx.TimelineScreen);
-            if (inspectScreen != null && inspectScreen.Visible)
+            if (inspectScreen != null && inspectScreen.Visible && IsInspectScreenReady(inspectScreen))
             {
                 result.InspectScreen = inspectScreen;
                 return ExecutionResult.Success();
@@ -154,7 +162,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         {
 
             var unlockScreen = UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
-            if (unlockScreen != null)
+            if (unlockScreen != null && unlockScreen.Visible && IsUnlockScreenReady(unlockScreen))
             {
                 var button = UiHelper.FindFirst<NUnlockConfirmButton>(unlockScreen);
                 if (button != null)
@@ -180,6 +188,50 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
 
         return ExecutionResult.Unstable("Unknown action");
     }
+
+    public static bool IsReadyForAction(NTimelineScreen timelineScreen)
+    {
+        if (UiHelper.FindFirst<NTimelineTutorial>(timelineScreen) is { Visible: true } tutorial)
+        {
+            return IsTutorialReady(tutorial);
+        }
+
+        if (UiHelper.FindFirst<NEpochInspectScreen>(timelineScreen) is { Visible: true } inspectScreen)
+        {
+            return IsInspectScreenReady(inspectScreen);
+        }
+
+        if (UiHelper.FindFirst<NUnlockScreen>(timelineScreen) is { Visible: true } unlockScreen)
+        {
+            return IsUnlockScreenReady(unlockScreen);
+        }
+
+        return !timelineScreen.IsScreenQueued();
+    }
+
+    private static bool IsTimelineIdle(NTimelineScreen timelineScreen)
+    {
+        return UiHelper.FindFirst<NTimelineTutorial>(timelineScreen) is not { Visible: true }
+            && UiHelper.FindFirst<NEpochInspectScreen>(timelineScreen) is not { Visible: true }
+            && UiHelper.FindFirst<NUnlockScreen>(timelineScreen) is not { Visible: true }
+            && !timelineScreen.IsScreenQueued();
+    }
+
+    private static bool IsTutorialReady(NTimelineTutorial tutorial)
+    {
+        return UiHelper.FindFirst<NAcknowledgeButton>(tutorial) is { Visible: true, IsEnabled: true };
+    }
+
+    private static bool IsInspectScreenReady(NEpochInspectScreen inspectScreen)
+    {
+        return inspectScreen.GetNodeOrNull<NButton>("%CloseButton") is { Visible: true, IsEnabled: true };
+    }
+
+    private static bool IsUnlockScreenReady(NUnlockScreen unlockScreen)
+    {
+        return UiHelper.FindFirst<NUnlockConfirmButton>(unlockScreen) is { Visible: true, IsEnabled: true };
+    }
+
     public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
     {
         await Task.Delay(1000);
@@ -215,18 +267,18 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
             AddUnlockEntry(result.UnlockScreen);
             await GodotMainThread.ClickAsync(result.ProceedButton);
             var nextUnlockScreen = await WaitForFollowUpUnlockScreen(ctx, result.UnlockScreen);
-            if (nextUnlockScreen is NUnlockTimelineScreen)
+            while (nextUnlockScreen is NUnlockTimelineScreen)
             {
                 AddUnlockEntry(nextUnlockScreen);
-                await WaitForUnlockScreensToFinish(ctx);
+                nextUnlockScreen = await WaitForFollowUpUnlockScreen(ctx, nextUnlockScreen);
+            }
+
+            if (nextUnlockScreen is null)
+            {
                 FlushPendingEpochUnlock();
                 return ExecutionResult.Success();
             }
 
-            if (nextUnlockScreen is null || !nextUnlockScreen.Visible)
-            {
-                FlushPendingEpochUnlock();
-            }
             await Task.Delay(500);
             return ExecutionResult.Success();
         }
@@ -450,6 +502,10 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
             NUnlockScreen? unlockScreen = UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
             if (unlockScreen == null || !unlockScreen.Visible)
             {
+                if (!GodotObject.IsInstanceValid(closingScreen) || !closingScreen.Visible)
+                {
+                    return null;
+                }
                 continue;
             }
 
@@ -463,21 +519,6 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         NeuroIntegration.Unstable();
 
         return UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
-    }
-
-    private static async Task WaitForUnlockScreensToFinish(ContextInfo ctx)
-    {
-        for (int i = 0; i < 400; i++)
-        {
-            NUnlockScreen? unlockScreen = UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
-            if (unlockScreen == null || !unlockScreen.Visible)
-            {
-                return;
-            }
-
-            await Task.Delay(100);
-        }
-        NeuroIntegration.Unstable();
     }
 
 }

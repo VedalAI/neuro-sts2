@@ -367,8 +367,9 @@ public static class GameStabilityDetector
                         _waitTimeBeforeNextCheck = 10; // Wait for 5 seconds before allowing stability checks to pass, giving time for event options to populate
                         return false;
                     }
-                    LogDebug("IsStable: timelines event → true");
-                    return true;
+                    var timelineReady = ctx.TimelineScreen != null && TimelinesHandler.IsReadyForAction(ctx.TimelineScreen);
+                    LogDebug($"IsStable: timelines event ready={timelineReady} → {timelineReady}");
+                    return timelineReady;
                 case ContextType.CharacterSelect:
                     LogDebug("IsStable: character select → true");
                     return true;
