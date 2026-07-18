@@ -53,7 +53,7 @@ public class NeuroIntegration : Node
         else
         {
 
-            Context.Send("You are playing Slay the Spire 2! be ready o conquer the spire and try your best to get the best deck and relic combination possible!");
+            Context.Send("You are playing Slay the Spire 2! be ready to conquer the spire and try your best to get the best deck and relic combination possible!");
         }
     }
 
