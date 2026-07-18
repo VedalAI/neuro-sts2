@@ -158,6 +158,12 @@ public class NeuroIntegration : Node
             Plugin.LogError("Context is Invalid");
             return;
         }
+        if (!QueryInfo.Registered && ctx.Type != ContextType.MainMenu)
+        {
+            QueryInfo.Registered = true;
+            NeuroActionHandler.RegisterActions(new QueryInfo());
+        }
+
         if (lastContext != ctx.Type)
         {
 
