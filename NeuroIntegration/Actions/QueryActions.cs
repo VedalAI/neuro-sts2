@@ -16,7 +16,7 @@ class QueryInfo : NeuroAction
   public static bool Registered = false;
   public override string Name => "query_info";
 
-  protected override string Description => "Query Info about yourself or an ally";
+  protected override string Description => "Query Info about yourself or an ally. If you don't include an ally index, it will default to send you info about yourself.";
 
   protected override JsonSchema? Schema => QJS.WrapObject(new Dictionary<string, JsonSchema>(){
     { "ally_index", QJS.Type(JsonSchemaType.Integer) }
