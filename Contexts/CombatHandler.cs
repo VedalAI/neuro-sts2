@@ -24,6 +24,8 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Hooks;
 using NeuroSdk.Messages.Outgoing;
+using MegaCrit.Sts2.Core.Nodes.Rooms;
+using MegaCrit.Sts2.Core.Nodes.Combat;
 
 namespace Sts2Agent.Contexts;
 
@@ -332,7 +334,12 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
             }
             if (!IsRevalidation)
                 NeuroIntegration.UnregisterAllActions();
-            return ExecutionResult.Success();
+            if (!NCombatRoom.Instance.Ui.Hand.InCardPlay && NCombatRoom.Instance.Ui.Hand.CurrentMode == NPlayerHand.Mode.Play)
+            {
+                return ExecutionResult.Success();
+            }
+
+            return ExecutionResult.Unstable("Something happened and we can't end turn yet");
         }
         return ExecutionResult.Unstable("Unknown action");
     }
@@ -624,15 +631,15 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         ActionQueue.Clear();
         NeuroIntegration.UnregisterAllActions();
 
-        var pcs = LocalContext.GetMe(ctx.RunState.Players)?.PlayerCombatState;
-
-        if (pcs == null) return ExecutionResult.Failure("Player combat state not found");
+        var me = LocalContext.GetMe(ctx.CombatState);
+        if (me == null) return ExecutionResult.Unstable("Player not found");
+        var pcs = me.PlayerCombatState;
+        if (pcs == null) return ExecutionResult.Unstable("Player combat state not found");
         if (pcs.Phase != PlayerTurnPhase.Play)
-            return ExecutionResult.Failure("Not in play phase");
-        var player = LocalContext.GetMe(ctx.RunState.Players);
-        var roundNumber = player.Creature.CombatState.RoundNumber;
+            return ExecutionResult.Unstable("Not in play phase");
+        var roundNumber = pcs.TurnNumber;
         RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(
-            new MegaCrit.Sts2.Core.GameActions.EndPlayerTurnAction(player, roundNumber));
+            new MegaCrit.Sts2.Core.GameActions.EndPlayerTurnAction(me, roundNumber));
 
         NeuroIntegration.SendContext("Your turn has ended. Please wait for the next turn before playing anymore cards or calling any tools", true);
         EndTurnConfirmationAsked = false;
