@@ -52,6 +52,13 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
     private PendingEpochUnlock? _pendingEpochUnlock;
 
     public ContextType Type => ContextType.TimelinesEvent;
+
+    private SceneTreeTimer _softlocktimer;
+    private SceneTreeTimer _fatalSoftlocktimer; // A Timer with a longer trigger window to handle fatel softlocks that can't be resolved from by rerunning actions
+
+    // If we repeat the same action 10 times in a row, we will consider it a softlock and reset fatally
+    private string previousAction = string.Empty;
+    private int actionRepeatCount = 0;
     public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
@@ -119,6 +126,38 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
 
     public ExecutionResult Validate(ConstructedAction action, ActionJData data, Result result, ContextInfo ctx)
     {
+        if (_softlocktimer == null)
+        {
+            ResetSoftlockTimer();
+        }
+
+        if (action.Name == previousAction)
+        {
+            actionRepeatCount++;
+            Plugin.LogDebug($"Action {action.Name} has been repeated {actionRepeatCount} times");
+            bool unlock_epoch_counter = action.Name == "unlock_epoch" && actionRepeatCount > 2; //This will unlikely be called many times in a row, but if it does, we will consider it a softlock and reset fatally
+            bool proceed_epoch_counter = action.Name == "proceed_epoch" && actionRepeatCount > 10;
+            bool proceed_counter = action.Name == "proceed" && actionRepeatCount > 10;
+            bool close_unlock_counter = action.Name == "close_unlock" && actionRepeatCount > 10;
+            bool back_to_main_menu_counter = action.Name == "back_to_main_menu" && actionRepeatCount > 2;
+
+            bool isSoftlock = unlock_epoch_counter || proceed_epoch_counter || proceed_counter || close_unlock_counter || back_to_main_menu_counter;
+
+            if (isSoftlock)
+            {
+                Plugin.LogDebug($"Action {action.Name} has been repeated {actionRepeatCount} times, triggering fatal softlock timer");
+                _fatalSoftlocktimer?.Disconnect("timeout", Callable.From(OnFatalSoftlockTimeout));
+                _fatalSoftlocktimer = null;
+                OnFatalSoftlockTimeout();
+                return ExecutionResult.Unstable($"Action {action.Name} has been repeated {actionRepeatCount} times, triggering fatal softlock timer");
+            }
+        }
+        else
+        {
+            previousAction = action.Name;
+            actionRepeatCount = 1;
+        }
+
         if (action.Name == "proceed")
         {
             var timelineTutorial = UiHelper.FindFirst<NTimelineTutorial>(SceneHelper.GetSceneRoot());
@@ -232,11 +271,57 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         return UiHelper.FindFirst<NUnlockConfirmButton>(unlockScreen) is { Visible: true, IsEnabled: true };
     }
 
+    private void OnSoftlockTimeout()
+    {
+        Plugin.LogDebug("Softlock timer expired, sending unstable message");
+        NeuroIntegration.Unstable();
+    }
+
+    private void OnFatalSoftlockTimeout()
+    {
+        Plugin.LogDebug("Fatal softlock timer expired, we are softlocked");
+        //Reset Screen
+        var backButton = NTimelineScreen.Instance.Get(NTimelineScreen.PropertyName._backButton).As<NBackButton>();
+        if (backButton != null)
+        {
+            GodotMainThread.ClickAsync(backButton);
+        }
+        else
+        {
+            NTimelineScreen.Instance.CallDeferred(NTimelineScreen.MethodName.ResetScreen);
+        }
+
+        NeuroIntegration.Unstable();
+    }
+
+    private void ResetSoftlockTimer()
+    {
+        if (_softlocktimer != null)
+        {
+            _softlocktimer.Disconnect("timeout", Callable.From(OnSoftlockTimeout));
+        }
+        if (_fatalSoftlocktimer != null)
+        {
+            _fatalSoftlocktimer.Disconnect("timeout", Callable.From(OnFatalSoftlockTimeout));
+        }
+        _softlocktimer = SceneHelper.GetSceneRoot().GetTree().CreateTimer(15f);
+        _softlocktimer.Connect("timeout", Callable.From(OnSoftlockTimeout));
+        _fatalSoftlocktimer = SceneHelper.GetSceneRoot().GetTree().CreateTimer(60f);
+        _fatalSoftlocktimer.Connect("timeout", Callable.From(OnFatalSoftlockTimeout));
+    }
+
     public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
     {
+        Plugin.LogDebug($"Current Softlock Timers: SoftlockTimer: {_softlocktimer?.TimeLeft}, FatalSoftlockTimer: {_fatalSoftlocktimer?.TimeLeft}");
         await Task.Delay(1000);
+        Plugin.LogDebug($"Current Softlock Timers: SoftlockTimer: {_softlocktimer?.TimeLeft}, FatalSoftlockTimer: {_fatalSoftlocktimer?.TimeLeft}");
         if (action.Name == "proceed" || action.Name == "back_to_main_menu")
         {
+            _softlocktimer?.Disconnect("timeout", Callable.From(OnSoftlockTimeout));
+            _softlocktimer = null;
+            _fatalSoftlocktimer?.Disconnect("timeout", Callable.From(OnFatalSoftlockTimeout));
+
+            _fatalSoftlocktimer = null;
             await GodotMainThread.ClickAsync(result.ProceedButton);
             await Task.Delay(1000);// wait for the screen to fade
             return ExecutionResult.Success();
@@ -248,6 +333,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
                 _pendingEpochUnlock = new PendingEpochUnlock(epochModel);
             }
             await GodotMainThread.ClickAsync(result.EpochButton);
+            ResetSoftlockTimer();
             await Task.Delay(1000);// wait for the screen to fade
             return ExecutionResult.Success();
         }
@@ -259,6 +345,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
             {
                 FlushPendingEpochUnlock();
             }
+            ResetSoftlockTimer();
             await Task.Delay(500);
             return ExecutionResult.Success();
         }
@@ -271,6 +358,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
             {
                 AddUnlockEntry(nextUnlockScreen);
                 nextUnlockScreen = await WaitForFollowUpUnlockScreen(ctx, nextUnlockScreen);
+                ResetSoftlockTimer();
             }
 
             if (nextUnlockScreen is null)
