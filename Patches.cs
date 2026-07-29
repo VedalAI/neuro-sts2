@@ -170,6 +170,15 @@ public static class TreasureRoomAutoPatch
                 return found;
             });
 
+            if (Plugin.IsMultiplayer())
+            {
+                Plugin.LogDebug("Treasure room: multiplayer detected, skipping auto-clicking relics");
+                TreasureHandler.FoundRelics = holders;
+                await Task.Delay(1000); // Wait a bit for the relics to be registered
+                NeuroIntegration.Unstable();
+                return;
+            }
+
             StringBuilder stringBuilder = new();
             stringBuilder.AppendLine("Received relics in Treasure Room:");
             foreach (var holder in holders)

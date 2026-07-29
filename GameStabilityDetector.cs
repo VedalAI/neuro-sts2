@@ -386,6 +386,11 @@ public static class GameStabilityDetector
                             && GodotObject.IsInstanceValid(treasureRoom)
                             && treasureRoom.ProceedButton?.IsEnabled == true;
                         LogDebug($"IsStable: treasure proceed={proceedEnabled} → {proceedEnabled}");
+                        if (TreasureHandler.FoundRelics.Count > 0 && !proceedEnabled && Plugin.IsMultiplayer()) // We only need to decide in multiplayer
+                        {
+                            LogDebug("IsMultiplayerStable: treasure room has relics, therefore we need to decide what to pick -> true");
+                            return true;
+                        }
                         return proceedEnabled;
                     }
                 default:

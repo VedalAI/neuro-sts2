@@ -10,6 +10,8 @@ using MegaCrit.Sts2.Core.Entities.Powers;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
+using MegaCrit.Sts2.Core.Platform;
+using MegaCrit.Sts2.Core.Runs;
 using Sts2Agent.Utilities;
 
 namespace Sts2Agent;
@@ -236,9 +238,9 @@ public static class RelicObtainedPatch
         try
         {
             var relicName = TextHelper.SafeLocString(() => relic.Title);
-            EventLog.Add("relic_obtained", $"Obtained relic: {relicName}", new Dictionary<string, object>
+            EventLog.Add("relic_obtained", $"{TextHelper.StripBBCode(PlatformUtil.GetPlayerNameRaw(RunManager.Instance.NetService.Platform, relic.Owner.NetId))} Obtained relic: {relicName}", new Dictionary<string, object>
             {
-                ["relic"] = relicName
+                ["relic"] = relicName,
             });
         }
         catch (Exception e)
