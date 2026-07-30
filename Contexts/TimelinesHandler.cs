@@ -59,6 +59,8 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
     // If we repeat the same action 10 times in a row, we will consider it a softlock and reset fatally
     private string previousAction = string.Empty;
     private int actionRepeatCount = 0;
+    private CancellationTokenSource _scts = new();
+    private CancellationToken _softlockFatalCancellationToken = new();
     public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder stringBuilder = new();
@@ -292,6 +294,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         }
 
         NeuroIntegration.Unstable();
+        _scts.Cancel(); // Cancel any ongoing operations that might be waiting for user input or screen changes
     }
 
     private void ResetSoftlockTimer()
@@ -328,6 +331,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
         }
         if (action.Name == "unlock_epoch")
         {
+            var cts_token = _scts.Token;
             if (result.EpochButton.model is EpochModel epochModel)
             {
                 _pendingEpochUnlock = new PendingEpochUnlock(epochModel);
@@ -341,6 +345,8 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
             await Task.Delay(3000);// wait for the screen to fade
             while (UiHelper.FindFirst<NEpochInspectScreen>(ctx.TimelineScreen) is { Visible: true } inspectScreen)
             {
+                cts_token.ThrowIfCancellationRequested();
+
                 if (!IsInspectScreenReady(inspectScreen))
                 {
                     await Task.Delay(250);
@@ -357,6 +363,7 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
                 ResetSoftlockTimer();
                 while (UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen) is { Visible: true } unlockScreen)
                 {
+                    cts_token.ThrowIfCancellationRequested();
                     if (!IsUnlockScreenReady(unlockScreen))
                     {
                         await Task.Delay(250);
