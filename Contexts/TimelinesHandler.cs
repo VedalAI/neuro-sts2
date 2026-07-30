@@ -312,9 +312,9 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
 
     public async Task<ExecutionResult?> TryExecute(ConstructedAction action, Result result, ContextInfo ctx)
     {
-        Plugin.LogDebug($"Current Softlock Timers: SoftlockTimer: {_softlocktimer?.TimeLeft}, FatalSoftlockTimer: {_fatalSoftlocktimer?.TimeLeft}");
+        if (_softlocktimer != null && _fatalSoftlocktimer != null && GodotObject.IsInstanceValid(_softlocktimer) && GodotObject.IsInstanceValid(_fatalSoftlocktimer))
+            Plugin.LogDebug($"Current Softlock Timers: SoftlockTimer: {_softlocktimer?.TimeLeft}, FatalSoftlockTimer: {_fatalSoftlocktimer?.TimeLeft}");
         await Task.Delay(1000);
-        Plugin.LogDebug($"Current Softlock Timers: SoftlockTimer: {_softlocktimer?.TimeLeft}, FatalSoftlockTimer: {_fatalSoftlocktimer?.TimeLeft}");
         if (action.Name == "proceed" || action.Name == "back_to_main_menu")
         {
             _softlocktimer?.Disconnect("timeout", Callable.From(OnSoftlockTimeout));
@@ -335,7 +335,62 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
             await GodotMainThread.ClickAsync(result.EpochButton);
             ResetSoftlockTimer();
             await Task.Delay(1000);// wait for the screen to fade
-            return ExecutionResult.Success();
+
+
+            ResetSoftlockTimer();
+            await Task.Delay(3000);// wait for the screen to fade
+            while (UiHelper.FindFirst<NEpochInspectScreen>(ctx.TimelineScreen) is { Visible: true } inspectScreen)
+            {
+                if (!IsInspectScreenReady(inspectScreen))
+                {
+                    await Task.Delay(250);
+                    continue;
+                }
+                if (inspectScreen.GetNodeOrNull<NButton>("%CloseButton") is not { Visible: true, IsEnabled: true } closeButton)
+                {
+                    await Task.Delay(250);
+                    continue;
+                }
+                await Task.Delay(2000);
+                await GodotMainThread.ClickAsync(closeButton);
+                await Task.Delay(500);// wait for the screen to fade
+                ResetSoftlockTimer();
+                while (UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen) is { Visible: true } unlockScreen)
+                {
+                    if (!IsUnlockScreenReady(unlockScreen))
+                    {
+                        await Task.Delay(250);
+                        continue;
+                    }
+                    if (UiHelper.FindFirst<NUnlockConfirmButton>(unlockScreen) is not { Visible: true, IsEnabled: true } confirmButton)
+                    {
+                        await Task.Delay(250);
+                        continue;
+                    }
+                    AddUnlockEntry(unlockScreen);
+                    await Task.Delay(2000);
+                    await GodotMainThread.ClickAsync(confirmButton);
+                    var nextUnlockScreen = await WaitForFollowUpUnlockScreen(ctx, unlockScreen);
+                    while (nextUnlockScreen is NUnlockTimelineScreen)
+                    {
+                        AddUnlockEntry(nextUnlockScreen);
+                        nextUnlockScreen = await WaitForFollowUpUnlockScreen(ctx, nextUnlockScreen);
+                        ResetSoftlockTimer();
+                    }
+
+                    if (nextUnlockScreen is null)
+                    {
+                        FlushPendingEpochUnlock();
+                        await Task.Delay(500);
+                        actionRepeatCount = 0; // Reset the action repeat count after a successful unlock
+                        previousAction = string.Empty; // Reset the previous action after a successful unlock
+                        ResetSoftlockTimer();
+                        return ExecutionResult.Success();
+                    }
+                }
+            }
+
+            return ExecutionResult.Unstable("Failed to unlock epoch, could not find the inspect screen or unlock screen");
         }
         if (action.Name == "proceed_epoch")
         {
@@ -604,8 +659,6 @@ public class TimelinesHandler : IContextHandler<TimelinesHandler.Result>
 
             return unlockScreen;
         }
-        NeuroIntegration.Unstable();
-
         return UiHelper.FindFirst<NUnlockScreen>(ctx.TimelineScreen);
     }
 
