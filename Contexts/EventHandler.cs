@@ -15,11 +15,19 @@ using NeuroSdk.Websocket;
 using Sts2Agent.Utilities;
 using NeuroSdk.Json;
 using System.Text;
+using MegaCrit.Sts2.Core.Models.Events;
+using MegaCrit.Sts2.Core.Nodes.Vfx;
+using System.Reflection;
+using MegaCrit.Sts2.Core.Entities.Ancients;
 
 namespace Sts2Agent.Contexts;
 
 public class EventContextHandler : IContextHandler<EventContextHandler.Result>
 {
+
+    private static readonly BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+    private static readonly FieldInfo? _architect_current_line = typeof(TheArchitect).GetField("_currentLineIndex", PrivateInstance);
+    private static readonly FieldInfo? _architect_dialogue = typeof(TheArchitect).GetField("_dialogue", PrivateInstance);
     public class Result
     {
         internal NButton? Button;
@@ -43,19 +51,43 @@ public class EventContextHandler : IContextHandler<EventContextHandler.Result>
 
         try
         {
-            var desc = evt.Description;
-            if (desc != null)
+            if (evt is not TheArchitect architect)
             {
-                eventBuilder.AppendLine();
-                eventBuilder.AppendLine("**Event description:**");
-                eventBuilder.AppendLine(desc.GetUnformattedText());
+                var desc = evt.Description;
+                if (desc != null)
+                {
+                    eventBuilder.AppendLine();
+                    eventBuilder.AppendLine("**Event description:**");
+                    eventBuilder.AppendLine(desc.GetUnformattedText());
+                }
+                else
+                {
+                    eventBuilder.AppendLine();
+                    eventBuilder.AppendLine("**Event description:**");
+                    eventBuilder.AppendLine(TextHelper.SafeLocString(() => evt.InitialDescription));
+                }
             }
             else
             {
-                eventBuilder.AppendLine();
-                eventBuilder.AppendLine("**Event description:**");
-                eventBuilder.AppendLine(TextHelper.SafeLocString(() => evt.InitialDescription));
+                var current_index = _architect_current_line?.GetValue(architect) as int?;
+                if (current_index != null && _architect_dialogue?.GetValue(architect) is AncientDialogue current_speech)
+                {
+                    var current_line = current_speech.Lines.ElementAtOrDefault(current_index.Value);
+                    if (current_line == null)
+                    {
+                        eventBuilder.AppendLine();
+                        eventBuilder.AppendLine("**Dialogue:**");
+                        eventBuilder.AppendLine("No dialogue");
+                    }
+                    else
+                    {
+                        eventBuilder.AppendLine();
+                        eventBuilder.AppendLine("**Dialogue:**");
+                        eventBuilder.AppendLine((current_line.Speaker == AncientDialogueSpeaker.Ancient ? "The Architect" : "You") + ": " + current_line.LineText?.GetUnformattedText() ?? "No dialogue");
+                    }
+                }
             }
+
         }
         catch
         {
