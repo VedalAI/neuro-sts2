@@ -26,6 +26,7 @@ using MegaCrit.Sts2.Core.Hooks;
 using NeuroSdk.Messages.Outgoing;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Combat;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 
 namespace Sts2Agent.Contexts;
 
@@ -467,6 +468,29 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
                     return ExecutionResult.Unstable("No valid target for potion");
             }
         }
+        else if (targetType == TargetType.AnyAlly || targetType == TargetType.AnyPlayer)
+        {
+            var combatState = ctx.CombatState;
+            if (combatState != null)
+            {
+                var allies = combatState.Allies.Where(c => c != null && c.IsAlive && c.IsPlayer);
+                if (data.GetValue("ally_index", -1) is int targetIndex && targetIndex >= 0)
+                {
+                    target = allies.ElementAtOrDefault(targetIndex);
+                }
+                else
+                {
+                    target = allies.FirstOrDefault();
+                }
+                if (target == null)
+                    return ExecutionResult.Unstable("No valid ally target for potion");
+            }
+        }
+        else if (targetType == TargetType.AllAllies || targetType == TargetType.AllEnemies)
+        {
+            // No specific target needed for these potions
+            target = null;
+        }
         else
         {
             // Self-targeting potions: game UI passes Owner.Creature
@@ -560,7 +584,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         }
         if (action.Name.StartsWith("use_potion"))
         {
-            return UsePotion(result, ctx);
+            return await UsePotion(result, ctx);
         }
         if (action.Name == "end_turn")
         {
@@ -652,12 +676,12 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         return ExecutionResult.Success("Turn ended");
     }
 
-    private ExecutionResult UsePotion(Result root, ContextInfo ctx)
+    private async Task<ExecutionResult> UsePotion(Result root, ContextInfo ctx)
     {
         if (root.Potion == null)
             return ExecutionResult.ModFailure("Couldn't find the potion even though it passed validation");
 
-        Callable.From(() => root.Potion.EnqueueManualUse(root.Target)).CallDeferred();
+        root.Potion.EnqueueManualUse(root.Target);
         Plugin.Log($"Used potion");
         return ExecutionResult.Success("Potion used");
     }
