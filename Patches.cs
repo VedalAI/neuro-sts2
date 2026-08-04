@@ -23,6 +23,8 @@ using System.Text;
 using Sts2Agent.Contexts;
 using STS2NeuroIntegration;
 using MegaCrit.Sts2.Core.Saves;
+using MegaCrit.Sts2.Core.Models.Events;
+using System.Reflection;
 
 namespace Sts2Agent;
 
@@ -44,11 +46,22 @@ public static class CombatSetupPatch
     }
 }
 
-[HarmonyPatch(typeof(CombatManager), nameof(CombatManager.EndCombatInternal))]
+[HarmonyPatch]
 public static class CombatEndInternalPatch
 {
-    [HarmonyPrefix]
-    public static void Prefix()
+    public static MethodBase? TargetMethod()
+    {
+        Type CombatTurnStateType = AccessTools.TypeByName("MegaCrit.Sts2.Core.Combat.CombatTurnState");
+        if (CombatTurnStateType == null)
+        {
+            Plugin.LogError("Could not find CombatTurnState type for patching.");
+            throw new Exception("Could not find CombatTurnState type for patching.");
+        }
+
+        Type[] parameterTypes = [CombatTurnStateType];
+        return AccessTools.Method(typeof(CombatManager), "EndCombatInternal", parameterTypes);
+    }
+    public static void Prefix(object[] __args)
     {
         try
         {
@@ -284,5 +297,17 @@ public static class SeenFtuePatch
         //Always return true, we don't want any ftues
         __result = true;
     }
+}
+
+[HarmonyPatch(typeof(TheArchitect), nameof(TheArchitect.OnRoomEnter))]
+public static class TheArchitectRoomEnterPatch
+{
+    [HarmonyPostfix]
+    public static void Postfix()
+    {
+        Plugin.LogDebug("The Architect room entered — scheduling stability check");
+        GameStabilityDetector.OnRoomEntered();
+    }
+
 }
 
