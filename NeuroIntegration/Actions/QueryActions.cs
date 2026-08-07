@@ -45,7 +45,7 @@ class QueryInfo : NeuroAction
     sb.RepresentDeck(player.Deck.Cards, MegaCrit.Sts2.Core.Entities.Cards.PileType.Deck);
 
 
-    NeuroIntegration.SendContext(sb.ToString());
+    NeuroIntegration.SendContext(sb.ToString(), true);
   }
 
   protected override ExecutionResult Validate(ActionJData actionData)
