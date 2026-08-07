@@ -27,16 +27,18 @@ public class MapHandler : IContextHandler<MapHandler.Result>
     }
     public ContextType Type => ContextType.Map;
 
-    //TODO: Figure out how to best represent the paths. Like giving context where a choice can lead, i.e. shop or rest site
     public ContextReturn GetContext(ContextInfo ctx)
     {
         StringBuilder mapBuilder = new();
         mapBuilder.AppendLine($"# You are on the map and about to travel somewhere. Act {ctx.RunState.CurrentActIndex + 1}");
-        mapBuilder.AppendLine($"Your current position is: {ctx.RunState?.CurrentMapCoord.ToString()}");
+        mapBuilder.AppendLine($"Your current position is Row:{ctx.RunState?.CurrentMapCoord.Value.row}, Collumn: {ctx.RunState?.CurrentMapCoord.Value.col}");
         mapBuilder.AppendLine($"You can travel to these locations:");
+        int index = 0;
         foreach (var coords in ctx.AvailableMapNodes ?? [])
         {
-            mapBuilder.AppendLine($"- [{coords.coord.row},{coords.coord.col}] {GetMapPointName(coords.PointType)}");
+            mapBuilder.AppendLine();
+            mapBuilder.AppendLine($"- '{index}' Room: '{GetMapPointName(coords.PointType)}' {GetMapPointPathDescription(coords)}");
+            index++;
         }
         return new ContextReturn(mapBuilder.ToString());
     }
@@ -70,7 +72,7 @@ public class MapHandler : IContextHandler<MapHandler.Result>
         foreach (var item in ctx.AvailableMapNodes)
         {
             var name = GetMapPointName(item.PointType);
-            forceText.AppendLine($"- '{index}': {name} ({item.coord.row},{item.coord.col})");
+            forceText.AppendLine($"- '{index}': {name}");
             index++;
         }
 
@@ -167,6 +169,122 @@ public class MapHandler : IContextHandler<MapHandler.Result>
         };
         if (locKey == null) return pointType.ToString();
         return TextHelper.StripBBCode(new LocString("map", locKey + ".title").GetFormattedText());
+    }
+
+
+    private static string GetMapPointPathDescription(MapPoint point)
+    {
+        var paths = new List<List<MapPoint>>();
+
+        void FindPaths(MapPoint current, List<MapPoint> path)
+        {
+            path.Add(current);
+            if (current.PointType == MapPointType.Boss || current.Children.Count == 0)
+            {
+                paths.Add([.. path]);
+            }
+            else
+            {
+                foreach (var child in current.Children.OrderBy(p => p.coord.row).ThenBy(p => p.coord.col))
+                    FindPaths(child, path);
+            }
+
+            path.RemoveAt(path.Count - 1);
+        }
+
+        // Children are the only legal next choices and always point toward the boss.
+        // The selected point is the route origin, so it is not part of any path summary.
+        foreach (var child in point.Children.OrderBy(p => p.coord.row).ThenBy(p => p.coord.col))
+            FindPaths(child, []);
+        if (paths.Count == 0)
+            return " [no onward path]";
+
+        MapPointType[] typeOrder =
+        [
+            MapPointType.Monster,
+            MapPointType.Elite,
+            MapPointType.Shop,
+            MapPointType.RestSite,
+            MapPointType.Treasure,
+            MapPointType.Unknown,
+            MapPointType.Boss
+        ];
+
+        var encounterSummary = new List<string>();
+        foreach (var type in typeOrder)
+        {
+            var counts = paths
+                .Select(path => path.Count(p => p.PointType == type))
+                .ToList();
+            var minimum = counts.Min();
+            var maximum = counts.Max();
+            if (maximum == 0)
+                continue;
+
+            var countText = minimum == maximum ? minimum.ToString() : $"{minimum}-{maximum}";
+            //Don't add the boss. as every path will lead to the boss, and there is only 1
+            if (type != MapPointType.Boss)
+                encounterSummary.Add($"{countText} {GetPathPointTypeName(type, maximum)}");
+        }
+        if (encounterSummary.Count == 0)
+            encounterSummary.Add("no classified rooms");
+
+        var specialMarkers = paths
+            .SelectMany(path => path)
+            .SelectMany(pathPoint => pathPoint.Quests.Select(quest =>
+                $"{quest.GetType().Name} ({quest.Id.Entry}) at [{pathPoint.coord.row},{pathPoint.coord.col}]"))
+            .Distinct()
+            .OrderBy(marker => marker)
+            .ToList();
+
+        var description = $"Going down this route you will run into: {string.Join(", ", encounterSummary)}";
+        if (specialMarkers.Count > 0)
+            description += $"; special markers: {string.Join(", ", specialMarkers)}";
+
+        //Distances along the path to the first encounter of each type.
+        {
+            var firstDistanceByType = new Dictionary<MapPointType, int>();
+            var queue = new Queue<(MapPoint point, int distance)>();
+            var visited = new HashSet<MapPoint>();
+            // The selected point is the first travel step, but is excluded from the reported distances.
+            queue.Enqueue((point, 1));
+
+            while (queue.Count > 0)
+            {
+                var (current, distance) = queue.Dequeue();
+                if (!visited.Add(current))
+                    continue;
+
+                if (current != point)
+                    firstDistanceByType.TryAdd(current.PointType, distance);
+                foreach (var child in current.Children)
+                    queue.Enqueue((child, distance + 1));
+            }
+
+            var distances = typeOrder
+                .Where(firstDistanceByType.ContainsKey)
+                .Select(type => type != MapPointType.Boss ? $"first {GetPathPointTypeName(type, 1)} in {firstDistanceByType[type]} step{(firstDistanceByType[type] == 1 ? "" : "s")}" : "Boss in " + firstDistanceByType[type] + " step" + (firstDistanceByType[type] == 1 ? "" : "s"))
+                .ToList();
+            if (distances.Count > 0)
+                description += $"; distances: {string.Join(", ", distances)}";
+        }
+
+        return description + "]";
+    }
+
+    private static string GetPathPointTypeName(MapPointType pointType, int count)
+    {
+        var plural = count != 1;
+        return pointType switch
+        {
+            MapPointType.Monster => plural ? "Enemies" : "Enemy",
+            MapPointType.Elite => plural ? "Elites" : "Elite",
+            MapPointType.Shop => plural ? "Shops" : "Shop",
+            MapPointType.RestSite => plural ? "Rest Sites" : "Rest Site",
+            MapPointType.Treasure => plural ? "Treasures" : "Treasure",
+            MapPointType.Unknown => plural ? "Unknown Events" : "Unknown Event",
+            _ => pointType.ToString()
+        };
     }
 
 }
