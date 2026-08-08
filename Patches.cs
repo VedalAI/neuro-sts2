@@ -15,6 +15,8 @@ using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
 using MegaCrit.Sts2.Core.Nodes.Screens.TreasureRoomRelic;
+using MegaCrit.Sts2.Core.Nodes.Ftue;
+using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Agent.Utilities;
@@ -287,6 +289,80 @@ public static class CharacterSelectOpenedPatch
     }
 }
 
+public static class AscensionFtueHelper
+{
+    public static void SendContextAndClose(NFtue popup, string titleKey, string descriptionKey, string disclaimerKey, string popupType)
+    {
+        try
+        {
+            var context = new StringBuilder();
+            context.AppendLine($"# {new LocString("ftues", titleKey).GetUnformattedText()}");
+            context.AppendLine(new LocString("ftues", descriptionKey).GetUnformattedText());
+            context.AppendLine(new LocString("ftues", disclaimerKey).GetUnformattedText());
+            NeuroIntegration.SendContext(context.ToString());
+            _ = CloseAfterDelay(popup, popupType);
+        }
+        catch (Exception e)
+        {
+            Plugin.LogError($"Error handling {popupType} ascension popup: {e}");
+        }
+    }
+
+    private static async Task CloseAfterDelay(NFtue popup, string popupType)
+    {
+        try
+        {
+            await Task.Delay(5000);
+            var confirmButton = await GodotMainThread.RunAsync(() =>
+            {
+                if (!GodotObject.IsInstanceValid(popup) || !popup.IsVisibleInTree())
+                    return null;
+                return popup.GetNodeOrNull<NClickableControl>("%FtueConfirmButton");
+            });
+
+            if (confirmButton != null && confirmButton.IsEnabled)
+            {
+                Plugin.LogDebug($"Closing {popupType} ascension popup after five seconds");
+                await GodotMainThread.ClickAsync(confirmButton);
+            }
+        }
+        catch (Exception e)
+        {
+            Plugin.LogError($"Error closing {popupType} ascension popup: {e}");
+        }
+    }
+}
+
+[HarmonyPatch(typeof(NAscensionSingleplayerFtue), nameof(NAscensionSingleplayerFtue._Ready))]
+public static class AscensionSingleplayerFtuePatch
+{
+    [HarmonyPostfix]
+    public static void Postfix(NAscensionSingleplayerFtue __instance)
+    {
+        AscensionFtueHelper.SendContextAndClose(
+            __instance,
+            "ASCENSION_SINGLEPLAYER_FTUE_TITLE",
+            "ASCENSION_SINGLEPLAYER_FTUE_DESCRIPTION",
+            "ASCENSION_SINGLEPLAYER_FTUE_DISCLAIMER",
+            "singleplayer");
+    }
+}
+
+[HarmonyPatch(typeof(NAscensionMultiplayerFtue), nameof(NAscensionMultiplayerFtue._Ready))]
+public static class AscensionMultiplayerFtuePatch
+{
+    [HarmonyPostfix]
+    public static void Postfix(NAscensionMultiplayerFtue __instance)
+    {
+        AscensionFtueHelper.SendContextAndClose(
+            __instance,
+            "ASCENSION_MULTIPLAYER_FTUE_TITLE",
+            "ASCENSION_MULTIPLAYER_FTUE_DESCRIPTION",
+            "ASCENSION_MULTIPLAYER_FTUE_DISCLAIMER",
+            "multiplayer");
+    }
+}
+
 
 [HarmonyPatch(typeof(SaveManager), nameof(SaveManager.SeenFtue))]
 public static class SeenFtuePatch
@@ -310,4 +386,3 @@ public static class TheArchitectRoomEnterPatch
     }
 
 }
-
