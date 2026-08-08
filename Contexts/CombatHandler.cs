@@ -310,6 +310,16 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         if (pcs.Phase != PlayerTurnPhase.Play || !cm.IsInProgress) return ExecutionResult.ModFailure("Not in play phase");
         var player = LocalContext.GetMe(ctx.RunState.Players);
         if (player == null) return ExecutionResult.ModFailure("Player not found");
+        if (action.Name == MultiplayerTurnRecovery.ResumeTurnActionName)
+        {
+            if (!Plugin.IsMultiplayer())
+                return ExecutionResult.Failure("Resuming a turn is only available in multiplayer");
+            if (!cm.IsPlayerReadyToEndTurn(player))
+                return ExecutionResult.Failure("Your turn is not ended");
+            if (cm.AllPlayersReadyToEndTurn())
+                return ExecutionResult.Failure("The turn is already advancing");
+            return ExecutionResult.Success();
+        }
         if (action.Name.StartsWith("play_card"))
         {
             var result = ValidateSingleCard(action, data, ref parsedData, ctx);
@@ -578,6 +588,10 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
 
     protected override async Task<ExecutionResult?> ExecuteQueuedAction(ConstructedAction action, Result result, ContextInfo ctx)
     {
+        if (action.Name == MultiplayerTurnRecovery.ResumeTurnActionName)
+        {
+            return await ResumeTurn(ctx);
+        }
         if (action.Name.StartsWith("play_card"))
         {
             return await PlayCard(result, ctx);
@@ -595,7 +609,7 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
 
     protected override void OnAfterQueuedAction(ConstructedAction action, Result result, ContextInfo freshCtx)
     {
-        if (action.Name == "end_turn")
+        if (action.Name is "end_turn" or MultiplayerTurnRecovery.ResumeTurnActionName)
         {
             return;
         }
@@ -674,6 +688,25 @@ public class CombatHandler : AbstractQueuedHandler<CombatHandler.Result>, IOnCon
         NeuroIntegration.UnregisterAllActions();
 
         return ExecutionResult.Success("Turn ended");
+    }
+
+    private Task<ExecutionResult> ResumeTurn(ContextInfo ctx)
+    {
+        var me = LocalContext.GetMe(ctx.CombatState);
+        var pcs = me?.PlayerCombatState;
+        if (me == null || pcs == null)
+            return Task.FromResult(ExecutionResult.Unstable("Player combat state not found"));
+
+        RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(
+            new MegaCrit.Sts2.Core.GameActions.UndoEndPlayerTurnAction(me, pcs.TurnNumber));
+        NeuroIntegration.UnregisterAction(MultiplayerTurnRecovery.ResumeTurnActionName);
+        _invalidatedActions.Clear();
+        _projectedPotionsUsed.Clear();
+        _projectedEnergyRemaining = int.MaxValue;
+        _projectedStarsRemaining = int.MaxValue;
+        GameStabilityDetector.ResetWasStable();
+        Plugin.Log("Resuming turn after ally resource gain");
+        return Task.FromResult(ExecutionResult.Success("Turn resumed"));
     }
 
     private async Task<ExecutionResult> UsePotion(Result root, ContextInfo ctx)

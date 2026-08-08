@@ -107,6 +107,21 @@ public class NeuroIntegration : Node
         Instance.GlobalActions.Clear();
     }
 
+    public static bool RegisterGlobalAction(ConstructedAction action)
+    {
+        if (Instance == null)
+        {
+            Plugin.LogError("Neuro Integration isn't Ready yet");
+            return false;
+        }
+        if (Instance.GlobalActions.Any(existing => existing.Name == action.Name))
+            return false;
+
+        Instance.GlobalActions.Add(action);
+        NeuroActionHandler.RegisterActions(action);
+        return true;
+    }
+
     /// <summary>
     /// Simple Wrapper for NeuroSdk.Messages.Outgoing.Context to make namespace collisions not happen when importing Context.
     /// </summary>

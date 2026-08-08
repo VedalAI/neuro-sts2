@@ -81,6 +81,57 @@ public static class CombatEndInternalPatch
     }
 }
 
+[HarmonyPatch(typeof(CardModel), nameof(CardModel.OnPlayWrapper))]
+public static class MultiplayerAllyCardResourcePatch
+{
+    [HarmonyPrefix]
+    public static void Prefix(CardModel __instance, out MultiplayerTurnRecovery.ResourceSnapshot? __state)
+    {
+        __state = MultiplayerTurnRecovery.CaptureBeforeEffect(
+            __instance.Owner,
+            TextHelper.SafeLocString(() => __instance.Title),
+            "played");
+    }
+
+    [HarmonyPostfix]
+    public static void Postfix(Task __result, MultiplayerTurnRecovery.ResourceSnapshot? __state)
+    {
+        if (__state != null)
+            _ = MultiplayerTurnRecovery.NotifyAfterEffect(__result, __state);
+    }
+}
+
+[HarmonyPatch(typeof(PotionModel), nameof(PotionModel.OnUseWrapper))]
+public static class MultiplayerAllyPotionResourcePatch
+{
+    [HarmonyPrefix]
+    public static void Prefix(PotionModel __instance, out MultiplayerTurnRecovery.ResourceSnapshot? __state)
+    {
+        __state = MultiplayerTurnRecovery.CaptureBeforeEffect(
+            __instance.Owner,
+            TextHelper.SafeLocString(() => __instance.Title),
+            "used");
+    }
+
+    [HarmonyPostfix]
+    public static void Postfix(Task __result, MultiplayerTurnRecovery.ResourceSnapshot? __state)
+    {
+        if (__state != null)
+            _ = MultiplayerTurnRecovery.NotifyAfterEffect(__result, __state);
+    }
+}
+
+[HarmonyPatch(typeof(CombatManager), nameof(CombatManager.SetReadyToEndTurn))]
+public static class MultiplayerTurnEndingPatch
+{
+    [HarmonyPostfix]
+    public static void Postfix(CombatManager __instance)
+    {
+        if (Plugin.IsMultiplayer() && __instance.AllPlayersReadyToEndTurn())
+            NeuroIntegration.UnregisterAction(MultiplayerTurnRecovery.ResumeTurnActionName);
+    }
+}
+
 [HarmonyPatch(typeof(NOverlayStack), nameof(NOverlayStack.Push))]
 public static class OverlayPushPatch
 {
