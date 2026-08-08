@@ -1,4 +1,4 @@
-# neuro-sts2
+# <img src="https://raw.githubusercontent.com/VedalAI/neuro-sdk/refs/heads/main/Assets/icon.png" width="29" style="vertical-align:middle;"> Slay the Spire 2 Neuro Integration
 
 A Slay the Spire 2 mod that integrates the game with Neuro SDK.
 
